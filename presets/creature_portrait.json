@@ -1,0 +1,17 @@
+{
+	"schema_version": 1,
+	"id": "creature_portrait",
+	"display_name": "Creature Portrait",
+	"description": "Portrait-biased head or bust framing for creatures and monsters.",
+	"tags": ["creature", "portrait", "bust", "dramatic"],
+	"resolution": {"width": 256, "height": 256},
+	"supersampling": 2,
+	"projection": "perspective",
+	"camera": {"orientation_strategy": "creature_portrait", "yaw": 18, "pitch": -4, "roll": 0, "fov": 28, "distance": 3, "occupancy": 0.86, "padding": 0.06, "auto_frame": true},
+	"lighting": {"rig": "dramatic_boss", "ambient_energy": 0.38},
+	"environment": {"background": "gradient", "gradient_top": [0.08, 0.12, 0.22, 1], "gradient_bottom": [0.015, 0.02, 0.05, 1], "color": [0.03, 0.04, 0.08, 1]},
+	"shadows": {"mode": "scene", "opacity": 0.22, "blur": 4, "offset": [0, 4]},
+	"post_process": {"contrast": 1.08, "saturation": 1.06, "alpha_threshold": 0.01, "bloom": 0.1, "outline": {"enabled": true, "width": 2, "opacity": 0.5, "color": [0.02, 0.04, 0.1, 1]}},
+	"composition": {"center_mode": "aabb", "vertical_bias": 0.05, "horizontal_bias": 0, "scale": 1, "rotation_order": "yxz"},
+	"output": {"format": "png", "transparent": false, "name_pattern": "{source_name}_portrait.png", "overwrite": false}
+}

@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REAL_SOURCE="${1:-$ROOT/tests/e2e/assets/real/Avocado.glb}"
+OUTPUT_DIR="$ROOT/out/gui-native-dnd-e2e"
+TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/iconstudio-native-dnd.XXXXXX")"
+trap 'rm -rf "$TEMP_DIR"' EXIT
+
+if [[ "${1:-}" == "--under-x" ]]; then
+	shift
+	REAL_SOURCE="${1:-$ROOT/tests/e2e/assets/real/Avocado.glb}"
+fi
+
+if [[ -z "${DISPLAY:-}" ]]; then
+	if ! command -v xvfb-run >/dev/null 2>&1; then
+		echo "FAIL  native GUI E2E requires X11 or xvfb-run" >&2
+		exit 127
+	fi
+	exec xvfb-run -a "$0" --under-x "$REAL_SOURCE"
+fi
+
+if [[ -n "${ICONSTUDIO_GODOT:-}" ]]; then
+	GODOT_BIN="$ICONSTUDIO_GODOT"
+elif [[ -x "$ROOT/.tools/godot/Godot_v4.7.2-stable_linux.x86_64" ]]; then
+	GODOT_BIN="$ROOT/.tools/godot/Godot_v4.7.2-stable_linux.x86_64"
+elif command -v godot >/dev/null 2>&1; then
+	GODOT_BIN="$(command -v godot)"
+elif command -v godot4 >/dev/null 2>&1; then
+	GODOT_BIN="$(command -v godot4)"
+else
+	echo "FAIL  Godot 4.x is required for native GUI E2E" >&2
+	exit 127
+fi
+if [[ ! -f "$REAL_SOURCE" ]]; then
+	echo "FAIL  native GUI E2E source does not exist: $REAL_SOURCE" >&2
+	exit 2
+fi
+if ! PYTHONPATH="${ICONSTUDIO_PYTHON_PATH:-}" python3 -c 'import Xlib' >/dev/null 2>&1; then
+	echo "FAIL  python-xlib is required; set ICONSTUDIO_PYTHON_PATH or install python-xlib" >&2
+	exit 127
+fi
+
+mkdir -p "$OUTPUT_DIR"
+DROP_SOURCE="$TEMP_DIR/$(basename "$REAL_SOURCE")"
+cp "$REAL_SOURCE" "$DROP_SOURCE"
+RESULT_PATH="$OUTPUT_DIR/result.json"
+SCREENSHOT_PATH="$OUTPUT_DIR/native_drop_preview.png"
+GODOT_LOG="$OUTPUT_DIR/godot.log"
+DRAG_LOG="$OUTPUT_DIR/drag.log"
+
+echo "Icon Studio native X11 drag/drop E2E"
+echo "===================================="
+echo "real source: $REAL_SOURCE"
+echo "external drop copy: $DROP_SOURCE"
+
+set +e
+"$GODOT_BIN" --path "$ROOT" --display-driver x11 --rendering-method gl_compatibility --audio-driver Dummy --disable-vsync -- --gui-native-test --source "$DROP_SOURCE" --screenshot "$SCREENSHOT_PATH" --timeout-ms 10000 > "$GODOT_LOG" 2>&1 &
+godot_pid=$!
+
+target_id=""
+for _ in $(seq 1 150); do
+	target_id="$(xwininfo -root -tree 2>/dev/null | awk '$1 ~ /^0x/ && $0 ~ /Icon Studio/ { print $1; exit }')"
+	if [[ -n "$target_id" ]]; then
+		break
+	fi
+	sleep 0.1
+done
+if [[ -z "$target_id" ]]; then
+	echo "TARGET_WINDOW_NOT_FOUND" > "$DRAG_LOG"
+	drag_status=1
+else
+	PYTHONPATH="${ICONSTUDIO_PYTHON_PATH:-}" python3 "$ROOT/scripts/x11-drag-source.py" "$target_id" "$DROP_SOURCE" > "$DRAG_LOG" 2>&1
+	drag_status=$?
+fi
+if [[ "$drag_status" -ne 0 ]]; then
+	kill "$godot_pid" 2>/dev/null || true
+fi
+wait "$godot_pid"
+godot_status=$?
+set -e
+
+json_line="$(rg '^\{' "$GODOT_LOG" | tail -1 || true)"
+if [[ -n "$json_line" ]]; then
+	printf '%s\n' "$json_line" > "$RESULT_PATH"
+	cat "$RESULT_PATH"
+fi
+if [[ "$drag_status" -ne 0 || "$godot_status" -ne 0 || -z "$json_line" ]] || ! rg -q '"success":true' "$RESULT_PATH"; then
+	echo "--- drag protocol ---" >&2
+	cat "$DRAG_LOG" >&2 || true
+	echo "--- Godot ---" >&2
+	cat "$GODOT_LOG" >&2 || true
+	echo "FAIL  native X11 drag/drop proof" >&2
+	exit 1
+fi
+
+echo "PASS  real OS XDND enter/position/drop, selection transfer, Godot files_dropped, render, and screenshot"
+echo "      proof: $OUTPUT_DIR"

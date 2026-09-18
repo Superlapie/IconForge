@@ -1,0 +1,7 @@
+{
+	"occupancy": 0.35,
+	"scale": 1.8,
+	"camera": {
+		"min_zoom": 0.02
+	}
+}

@@ -1,0 +1,17 @@
+{
+	"schema_version": 1,
+	"id": "equipment_preview",
+	"display_name": "Equipment Preview",
+	"description": "Larger clean transparent render for item details and equipment panels.",
+	"tags": ["equipment", "detail", "panel", "transparent"],
+	"resolution": {"width": 512, "height": 512},
+	"supersampling": 2,
+	"projection": "perspective",
+	"camera": {"orientation_strategy": "helmet_three_quarter", "yaw": 24, "pitch": -8, "roll": 0, "fov": 34, "distance": 4, "occupancy": 0.78, "padding": 0.1, "auto_frame": true},
+	"lighting": {"rig": "neutral_studio", "ambient_energy": 0.5},
+	"environment": {"background": "transparent", "color": [0.04, 0.05, 0.08, 1]},
+	"shadows": {"mode": "contact", "opacity": 0.2, "blur": 5, "offset": [0, 6]},
+	"post_process": {"contrast": 1.03, "saturation": 1.02, "alpha_threshold": 0.01, "outline": {"enabled": false}},
+	"composition": {"center_mode": "aabb", "vertical_bias": 0.02, "horizontal_bias": 0, "scale": 1, "rotation_order": "yxz"},
+	"output": {"format": "png", "transparent": true, "name_pattern": "{source_name}_preview.png", "overwrite": false}
+}

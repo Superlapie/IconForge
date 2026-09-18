@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+set -u
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CLI="$ROOT/scripts/iconstudio"
+failed=0
+
+echo "Icon Studio quality gate"
+echo "========================"
+
+if "$CLI" --test; then
+	:
+else
+	failed=1
+	echo "FAIL  automated Godot tests"
+fi
+
+for preset in "$ROOT"/presets/*.json; do
+	if "$CLI" validate-preset "$preset" --json >/dev/null; then
+		:
+	else
+		failed=1
+		echo "FAIL  preset validation: $preset"
+	fi
+done
+
+if "$CLI" render fixtures/sword.gltf --preset weapon --output out/quality_sword.png --force --json; then
+	:
+else
+	failed=1
+	echo "FAIL  single fixture render"
+fi
+
+if "$CLI" validate-output out/quality_sword.png --preset weapon --json; then
+	:
+else
+	failed=1
+	echo "FAIL  output quality validation"
+fi
+
+if "$CLI" render-batch fixtures --preset neutral_asset_thumbnail --output out/quality_batch --force --manifest out/quality_batch/manifest.json --json; then
+	:
+else
+	failed=1
+	echo "FAIL  batch render smoke test"
+fi
+
+if "$ROOT/scripts/real-model-e2e"; then
+	:
+else
+	failed=1
+	echo "FAIL  real-model E2E"
+fi
+
+if "$ROOT/scripts/gui-e2e"; then
+	:
+else
+	failed=1
+	echo "FAIL  GUI drag/drop E2E"
+fi
+
+if [[ "$failed" -eq 0 ]]; then
+	echo "PASS  all quality gates"
+	exit 0
+fi
+
+echo "FAIL  one or more quality gates failed"
+exit 1

@@ -1,0 +1,17 @@
+{
+	"schema_version": 1,
+	"id": "inventory_item",
+	"display_name": "Inventory Item",
+	"description": "Transparent, restrained three-quarter item render for inventory grids.",
+	"tags": ["item", "inventory", "transparent", "orthographic"],
+	"resolution": {"width": 256, "height": 256},
+	"supersampling": 2,
+	"projection": "orthographic",
+	"camera": {"orientation_strategy": "potion_three_quarter", "yaw": 18.0, "pitch": -8.0, "roll": 0.0, "fov": 34.0, "distance": 3.0, "orthographic_size": 2.4, "occupancy": 0.82, "padding": 0.08, "target": [0, 0, 0], "offset": [0, 0, 0], "min_zoom": 0.1, "max_zoom": 100, "auto_frame": true},
+	"lighting": {"rig": "stylized_inventory", "ambient_energy": 0.48, "key": {"angle": [-35, -35, 0], "intensity": 1.2, "color": [1, 0.93, 0.84, 1], "shadow": true}, "fill": {"angle": [-20, 135, 0], "intensity": 0.55, "color": [0.72, 0.83, 1, 1], "shadow": false}, "rim": {"angle": [20, 155, 0], "intensity": 0.75, "color": [0.55, 0.7, 1, 1], "shadow": false}},
+	"environment": {"background": "transparent", "color": [0.04, 0.05, 0.08, 1], "gradient_top": [0.1, 0.12, 0.2, 1], "gradient_bottom": [0.02, 0.025, 0.045, 1]},
+	"shadows": {"mode": "contact", "opacity": 0.18, "blur": 3, "offset": [0, 4]},
+	"post_process": {"exposure": 0, "brightness": 1, "contrast": 1.04, "saturation": 1.03, "gamma": 1, "sharpen": 0.1, "bloom": 0, "alpha_threshold": 0.01, "outline": {"enabled": false, "width": 2, "opacity": 0.8, "color": [0.03, 0.04, 0.08, 1]}, "drop_shadow": {"enabled": false, "offset": [0, 4], "blur": 4, "opacity": 0.2, "color": [0, 0, 0, 1]}},
+	"composition": {"center_mode": "aabb", "vertical_bias": 0, "horizontal_bias": 0, "scale": 1, "rotation_order": "yxz"},
+	"output": {"format": "png", "transparent": true, "name_pattern": "{source_name}.png", "overwrite": false}
+}

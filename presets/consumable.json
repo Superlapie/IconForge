@@ -1,0 +1,17 @@
+{
+	"schema_version": 1,
+	"id": "consumable",
+	"display_name": "Consumable",
+	"description": "Centered, slightly elevated studio composition for bottles, food, and scrolls.",
+	"tags": ["consumable", "potion", "centered", "transparent"],
+	"resolution": {"width": 256, "height": 256},
+	"supersampling": 2,
+	"projection": "orthographic",
+	"camera": {"orientation_strategy": "potion_three_quarter", "yaw": 26, "pitch": -10, "roll": 0, "occupancy": 0.78, "padding": 0.1, "auto_frame": true},
+	"lighting": {"rig": "warm_fantasy", "ambient_energy": 0.5},
+	"environment": {"background": "transparent", "color": [0.04, 0.05, 0.08, 1]},
+	"shadows": {"mode": "contact", "opacity": 0.2, "blur": 4, "offset": [0, 5]},
+	"post_process": {"contrast": 1.05, "saturation": 1.08, "alpha_threshold": 0.01, "bloom": 0.04, "outline": {"enabled": false}},
+	"composition": {"center_mode": "aabb", "vertical_bias": 0.03, "horizontal_bias": 0, "scale": 1, "rotation_order": "yxz"},
+	"output": {"format": "png", "transparent": true, "name_pattern": "{source_name}.png", "overwrite": false}
+}

@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REAL_SOURCE="${1:-$ROOT/tests/e2e/assets/real/Avocado.glb}"
+OUTPUT_DIR="$ROOT/out/gui-e2e"
+TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/iconstudio-gui-e2e.XXXXXX")"
+trap 'rm -rf "$TEMP_DIR"' EXIT
+
+if [[ -n "${ICONSTUDIO_GODOT:-}" ]]; then
+	GODOT_BIN="$ICONSTUDIO_GODOT"
+elif [[ -x "$ROOT/.tools/godot/Godot_v4.7.2-stable_linux.x86_64" ]]; then
+	GODOT_BIN="$ROOT/.tools/godot/Godot_v4.7.2-stable_linux.x86_64"
+elif command -v godot >/dev/null 2>&1; then
+	GODOT_BIN="$(command -v godot)"
+elif command -v godot4 >/dev/null 2>&1; then
+	GODOT_BIN="$(command -v godot4)"
+else
+	echo "FAIL  Godot 4.x is required for GUI E2E" >&2
+	exit 127
+fi
+
+if [[ ! -f "$REAL_SOURCE" ]]; then
+	echo "FAIL  GUI E2E source does not exist: $REAL_SOURCE" >&2
+	exit 2
+fi
+if ! command -v xvfb-run >/dev/null 2>&1 && [[ -z "${DISPLAY:-}" ]]; then
+	echo "FAIL  GUI E2E requires X11 or xvfb-run" >&2
+	exit 127
+fi
+
+mkdir -p "$OUTPUT_DIR"
+DROP_SOURCE="$TEMP_DIR/$(basename "$REAL_SOURCE")"
+cp "$REAL_SOURCE" "$DROP_SOURCE"
+RESULT_PATH="$OUTPUT_DIR/result.json"
+SCREENSHOT_PATH="$OUTPUT_DIR/drop_preview.png"
+LOG_PATH="$OUTPUT_DIR/godot.log"
+
+echo "Icon Studio GUI drag/drop E2E"
+echo "=============================="
+echo "real source: $REAL_SOURCE"
+echo "external drop copy: $DROP_SOURCE"
+
+set +e
+if command -v xvfb-run >/dev/null 2>&1; then
+	xvfb-run -a "$GODOT_BIN" --path "$ROOT" --display-driver x11 --rendering-method gl_compatibility --audio-driver Dummy --disable-vsync -- --gui-test --source "$DROP_SOURCE" --screenshot "$SCREENSHOT_PATH" > "$LOG_PATH" 2>&1
+	status=$?
+else
+	"$GODOT_BIN" --path "$ROOT" --display-driver x11 --rendering-method gl_compatibility --audio-driver Dummy --disable-vsync -- --gui-test --source "$DROP_SOURCE" --screenshot "$SCREENSHOT_PATH" > "$LOG_PATH" 2>&1
+	status=$?
+fi
+set -e
+
+json_line="$(rg '^\{' "$LOG_PATH" | tail -1 || true)"
+if [[ -z "$json_line" ]]; then
+	cat "$LOG_PATH" >&2
+	echo "FAIL  GUI E2E produced no machine-readable result" >&2
+	exit 1
+fi
+printf '%s\n' "$json_line" > "$RESULT_PATH"
+cat "$RESULT_PATH"
+if [[ "$status" -ne 0 ]] || ! rg -q '"success":true' "$RESULT_PATH"; then
+	cat "$LOG_PATH" >&2
+	echo "FAIL  GUI native signal/drop/render proof" >&2
+	exit 1
+fi
+
+echo "PASS  native Window.files_dropped signal, external real GLB load, preview, duplicate/rejection handling"
+echo "      proof: $OUTPUT_DIR"

@@ -1,0 +1,17 @@
+{
+	"schema_version": 1,
+	"id": "armor",
+	"display_name": "Armor",
+	"description": "Clean three-quarter armor presentation with enough space for silhouette details.",
+	"tags": ["armor", "equipment", "three-quarter", "transparent"],
+	"resolution": {"width": 256, "height": 256},
+	"supersampling": 2,
+	"projection": "orthographic",
+	"camera": {"orientation_strategy": "helmet_three_quarter", "yaw": 22, "pitch": -6, "roll": 0, "occupancy": 0.8, "padding": 0.09, "auto_frame": true},
+	"lighting": {"rig": "neutral_studio", "ambient_energy": 0.52},
+	"environment": {"background": "transparent", "color": [0.04, 0.05, 0.08, 1]},
+	"shadows": {"mode": "contact", "opacity": 0.16, "blur": 3, "offset": [0, 4]},
+	"post_process": {"contrast": 1.03, "saturation": 1, "alpha_threshold": 0.01, "outline": {"enabled": false}},
+	"composition": {"center_mode": "aabb", "vertical_bias": 0.02, "horizontal_bias": 0, "scale": 1, "rotation_order": "yxz"},
+	"output": {"format": "png", "transparent": true, "name_pattern": "{source_name}.png", "overwrite": false}
+}

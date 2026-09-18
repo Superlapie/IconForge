@@ -1,0 +1,17 @@
+{
+	"schema_version": 1,
+	"id": "boss_portrait",
+	"display_name": "Boss Portrait",
+	"description": "Dramatic larger-scale portrait treatment with controlled glow and contrast.",
+	"tags": ["boss", "portrait", "dramatic", "glow"],
+	"resolution": {"width": 512, "height": 512},
+	"supersampling": 2,
+	"projection": "perspective",
+	"camera": {"orientation_strategy": "creature_portrait", "yaw": 24, "pitch": -8, "roll": 0, "fov": 30, "distance": 3.5, "occupancy": 0.82, "padding": 0.08, "auto_frame": true},
+	"lighting": {"rig": "dramatic_boss", "ambient_energy": 0.32},
+	"environment": {"background": "gradient", "gradient_top": [0.18, 0.05, 0.08, 1], "gradient_bottom": [0.025, 0.01, 0.025, 1], "color": [0.05, 0.01, 0.02, 1]},
+	"shadows": {"mode": "scene", "opacity": 0.3, "blur": 5, "offset": [0, 6]},
+	"post_process": {"exposure": 0.1, "contrast": 1.12, "saturation": 1.12, "alpha_threshold": 0.01, "bloom": 0.16, "outline": {"enabled": true, "width": 3, "opacity": 0.5, "color": [0.12, 0.015, 0.025, 1]}},
+	"composition": {"center_mode": "aabb", "vertical_bias": 0.08, "horizontal_bias": 0, "scale": 1, "rotation_order": "yxz"},
+	"output": {"format": "png", "transparent": false, "name_pattern": "{source_name}_boss.png", "overwrite": false}
+}

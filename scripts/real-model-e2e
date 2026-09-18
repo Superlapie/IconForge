@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CLI="$ROOT/scripts/iconstudio"
+REAL_DIR="$ROOT/tests/e2e/assets/real"
+OUTPUT_DIR="$ROOT/out/e2e-real"
+
+if [[ -n "${ICONSTUDIO_GODOT:-}" ]]; then
+	GODOT_BIN="$ICONSTUDIO_GODOT"
+elif [[ -x "$ROOT/.tools/godot/Godot_v4.7.2-stable_linux.x86_64" ]]; then
+	GODOT_BIN="$ROOT/.tools/godot/Godot_v4.7.2-stable_linux.x86_64"
+elif command -v godot >/dev/null 2>&1; then
+	GODOT_BIN="$(command -v godot)"
+elif command -v godot4 >/dev/null 2>&1; then
+	GODOT_BIN="$(command -v godot4)"
+else
+	echo "FAIL  Godot 4.x is required for real-model E2E" >&2
+	exit 127
+fi
+
+mkdir -p "$OUTPUT_DIR/batch"
+
+echo "Icon Studio real-model E2E"
+echo "=========================="
+
+# A fresh checkout has not necessarily imported newly added GLB files yet.
+# This is a one-time project import, not a rendering dependency on the editor.
+"$GODOT_BIN" --headless --path "$ROOT" --editor --import --quit >/dev/null
+
+(cd "$REAL_DIR" && sha256sum --check SHA256SUMS)
+
+"$CLI" inspect "$REAL_DIR/Avocado.glb" --json > "$OUTPUT_DIR/inspect_avocado.json"
+"$CLI" inspect "$REAL_DIR/BoomBox.glb" --json > "$OUTPUT_DIR/inspect_boombox.json"
+rg -q '"success":true' "$OUTPUT_DIR/inspect_avocado.json"
+rg -q '"success":true' "$OUTPUT_DIR/inspect_boombox.json"
+
+"$CLI" render "$REAL_DIR/Avocado.glb" \
+	--preset consumable \
+	--output "$OUTPUT_DIR/avocado_consumable.png" \
+	--force --json > "$OUTPUT_DIR/render_avocado.json"
+rg -q '"success":true' "$OUTPUT_DIR/render_avocado.json"
+
+# Reproduce the default preset decision first. The explicit flag wins over the
+# source sidecar and proves that the warning is machine-visible.
+"$CLI" render "$REAL_DIR/BoomBox.glb" \
+	--preset neutral_asset_thumbnail \
+	--occupancy 0.80 \
+	--scale 0.30 \
+	--output "$OUTPUT_DIR/boombox_baseline.png" \
+	--force --json > "$OUTPUT_DIR/render_boombox_baseline.json"
+rg -q '"success":true' "$OUTPUT_DIR/render_boombox_baseline.json"
+rg -q '"OUTPUT_OCCUPANCY_LOW"' "$OUTPUT_DIR/render_boombox_baseline.json"
+
+# The committed sidecar is then picked up automatically on the next run.
+"$CLI" render "$REAL_DIR/BoomBox.glb" \
+	--preset neutral_asset_thumbnail \
+	--output "$OUTPUT_DIR/boombox_corrected.png" \
+	--force --json > "$OUTPUT_DIR/render_boombox_corrected.json"
+rg -q '"success":true' "$OUTPUT_DIR/render_boombox_corrected.json"
+rg -q '"warnings":\[\]' "$OUTPUT_DIR/render_boombox_corrected.json"
+
+"$CLI" validate-output "$OUTPUT_DIR/boombox_corrected.png" \
+	--preset neutral_asset_thumbnail --occupancy 0.35 --json > "$OUTPUT_DIR/validate_boombox.json"
+rg -q '"success":true' "$OUTPUT_DIR/validate_boombox.json"
+rg -q '"warnings":\[\]' "$OUTPUT_DIR/validate_boombox.json"
+
+"$CLI" render-batch "$REAL_DIR" \
+	--preset neutral_asset_thumbnail \
+	--output "$OUTPUT_DIR/batch" \
+	--manifest "$OUTPUT_DIR/batch/manifest.json" \
+	--force --json > "$OUTPUT_DIR/batch.json"
+rg -q '"success":true' "$OUTPUT_DIR/batch.json"
+rg -q '"failed":0' "$OUTPUT_DIR/batch.json"
+rg -q '"status"[[:space:]]*:[[:space:]]*"success"' "$OUTPUT_DIR/batch/manifest.json"
+
+echo "PASS  real GLB inspection, textured render, correction, validation, and batch manifest"
+echo "      proof: $OUTPUT_DIR"

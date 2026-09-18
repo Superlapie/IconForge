@@ -1,0 +1,11 @@
+.godot/
+.tools/
+out/*
+!out/.gitkeep
+user://
+*.import
+
+# Godot extracts embedded GLB textures beside real-model E2E sources during
+# import. They are reproducible importer artifacts, not source fixtures.
+tests/e2e/assets/real/*_[0-9].png
+tests/e2e/assets/real/*_[0-9].png.import
