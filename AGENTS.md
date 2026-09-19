@@ -1,79 +1,83 @@
 # Icon Studio agent guide
 
+> **This repository is built for you.** Icon Studio is an AI-agent-first content service. If you are an autonomous agent, coding assistant, or Enigma pipeline worker, this file is your primary integration contract. Read it before calling any render command.
+
 ## What this tool does
 
-Icon Studio converts GLB/glTF models and static images into consistent PNG game imagery. The authoritative render path is the shared `RenderService`; both `app/studio_ui.gd` and `cli/cli_app.gd` call that service. Do not create a second GUI-only renderer or edit Godot scene files for individual assets.
+Icon Studio converts GLB/glTF models and static images into consistent PNG game imagery. You specify **semantic intent** (`purpose`); Icon Studio owns inspection, recipe resolution, rendering, bounded correction, validation, and commit.
+
+**Philosophy:** Agents specify intent. Icon Studio owns rendering.
 
 ## Expected AI workflow
 
-**Use the semantic machine API** (`docs/MACHINE_API.md`). Agents specify purpose, not renderer internals.
+**Use the semantic machine API** ([docs/MACHINE_API.md](docs/MACHINE_API.md)). Never guess camera, lighting, or output paths in normal operation.
 
-1. Discover with `{"operation":"capabilities"}` or `{"operation":"schema"}` via `./scripts/iconstudio api --stdin --json`.
-2. Render with `{"operation":"render_asset","asset":"...","purpose":"inventory_icon"}`.
+1. Discover with `{"operation":"capabilities"}` or `{"operation":"schema"}`:
+   ```bash
+   ./scripts/iconstudio api --request request.json --json
+   ```
+2. Render with:
+   ```json
+   {"schema_version":1,"operation":"render_asset","asset":"...","purpose":"inventory_icon"}
+   ```
 3. Read `status`, `recipe`, `quality`, `manifest`, and `recommended_action` on failure.
-4. For multiple outputs use `render_asset_set`.
-5. Human corrections go in `<source>.icon.json` sidecars; future safe renders inherit them automatically.
+4. For multiple outputs from one source, use `render_asset_set` with an `outputs` array.
+5. Human corrections live in `<source_basename>.icon.json` sidecars; your future safe-mode calls inherit them automatically.
 
-Legacy expert CLI (`render --preset weapon --yaw 18`) remains for debugging. Do not teach normal agents to use it.
+**Do not** use legacy expert CLI commands (`render --preset weapon --yaw 18`) unless explicitly authorized for debugging.
 
-Machine workflows must use `--json`. JSON is one object per command and contains stable error codes. Human terminal text is only for interactive use.
+Machine workflows must use `--json`. Every response is one JSON object with stable error codes. Human terminal text is for interactive use only.
 
-## Preset model
+## What you should send
 
-Presets are JSON files in `presets/` with `schema_version: 1`, stable filename-safe `id`, resolution, projection, camera, lighting, environment, shadows, post-process, composition, and output sections. `PresetDefinition` is the canonical parser/normalizer. Use `validate-preset` before adding or changing a preset. Use `schema --json` instead of guessing field names.
+| Field | Example | Required |
+|-------|---------|----------|
+| `schema_version` | `1` | yes |
+| `operation` | `render_asset` | yes |
+| `asset` | `assets/items/sword.glb` | yes |
+| `purpose` | `inventory_icon` | yes (for render) |
 
-Built-in presets include `inventory_item`, `weapon`, `armor`, `consumable`, `resource`, `creature_portrait`, `npc_portrait`, `boss_portrait`, `equipment_preview`, `shop_thumbnail`, and `neutral_asset_thumbnail`.
+## What you should NOT send (safe mode)
 
-## Override model
+- `yaw`, `pitch`, `roll`, `fov`, `occupancy`, `padding`, `scale`
+- `preset` IDs (resolved internally from `purpose` + inspection)
+- Arbitrary `output` paths (destination chosen by purpose registry)
+- Unknown fields (rejected with `UNKNOWN_FIELD`)
 
-Per-asset sidecars use the source basename:
+## Outcomes you can receive
 
-```json
-{
-  "yaw": 18,
-  "pitch": -6,
-  "roll": -28,
-  "occupancy": 0.84,
-  "padding": 0.08,
-  "scale": 0.96
-}
-```
+| Status | Meaning | Your action |
+|--------|---------|-------------|
+| `validated` | Output passed production contract | Use `output.path` and `manifest` |
+| `needs_review` | Bounded correction exhausted | Read `recommended_action`; human may fix sidecar |
+| `failed` | Hard error (bad request, missing source) | Read `code` and `recommended_action` |
+| `partial_success` | `render_asset_set` with mixed results | Inspect per-purpose entries in `outputs` |
 
-The renderer automatically loads `<source_basename>.icon.json`. CLI flags override sidecar values for one invocation. Sidecars are the reproducible place to keep a correction that should apply to every future batch.
+## Preset model (internal — do not select in safe mode)
+
+Presets are versioned production recipes in `presets/` with `preset_revision`. The `RecipeResolver` maps your `purpose` plus inspection morphology to the correct preset. You do not need to know whether a sword becomes `weapon` or `inventory_item`.
+
+Built-in preset families include `inventory_item`, `weapon`, `armor`, `consumable`, `resource`, `creature_portrait`, `npc_portrait`, `boss_portrait`, `equipment_preview`, `shop_thumbnail`, and `neutral_asset_thumbnail`.
+
+## Override model (sidecars)
+
+Per-asset sidecars use the source basename (`iron_sword.icon.json`). They are loaded automatically during safe-mode renders. If a human fixed framing, your next identical request should succeed without knowing the correction details.
 
 ## Validation and quality rules
 
-Quality checks detect missing outputs, invalid image data, resolution mismatch, fully transparent images, clipping, and materially low/high silhouette occupancy. `success: false` means an error blocked acceptance; warnings are actionable but do not necessarily fail a render. Auto-framing has a bounded five-pass correction loop and never retries forever.
-
-The GUI drop boundary is `Window.files_dropped`; accepted files must flow
-through `handle_dropped_files`, `AssetInspector`, and `RenderService`. Run
-`./scripts/gui-e2e` for the real external-model GUI proof. On Linux/X11, run
-`docs/GUI_E2E.md`'s native XDND command when validating the OS protocol itself.
+`success: true` means the output passed the **production contract** — not merely that a PNG was written. Quality checks cover resolution, alpha, clipping, occupancy bounds, and empty silhouettes. Auto-framing has a bounded correction loop and never retries forever.
 
 ## Batch processing
 
-Use `render-batch INPUT --preset ID --output DIRECTORY --json`. One source failure is recorded in the result and manifest while other sources continue. The manifest includes tool version, preset, source, output, status, warnings, errors, and metrics. Cache keys include source SHA-256, resolved preset, override configuration, and tool version; use `--force` to bypass it.
+For multiple purposes on one asset, prefer `render_asset_set` over multiple `render_asset` calls. For many sources with one preset, legacy `render-batch` remains available for expert workflows.
 
-## Safe editing rules
+## Safe editing rules (if you modify this repo)
 
 - Never overwrite a source model or source image.
-- Prefer `apply_patch` for repository edits.
 - Keep canonical preset fields in JSON and shared behavior in `core/` services.
-- Do not bypass `RenderService`, `PresetDefinition`, `AssetInspector`, or `QualityService` for a new CLI or GUI feature.
+- Do not bypass `ApiService`, `RenderService`, `PresetDefinition`, `AssetInspector`, or `QualityService`.
 - Do not add proprietary fixtures or online runtime dependencies.
-- Use atomic JSON and PNG writes already provided by `IconStudioFileUtil`.
-- Run `./scripts/quality-gate` after changes to rendering, presets, CLI, fixtures, or output validation.
-
-## Adding a preset
-
-Copy an existing JSON preset, change its stable `id`, intended-use description, and composition values, then run:
-
-```bash
-./scripts/iconstudio validate-preset presets/my_preset.json --json
-./scripts/iconstudio presets --json
-```
-
-No code change is needed for a data-only preset. If a new behavior is required, extend the shared service and schema first, then add tests and documentation.
+- Run `./scripts/quality-gate` after changes to rendering, presets, CLI, fixtures, API, or output validation.
 
 ## Canonical quality command
 

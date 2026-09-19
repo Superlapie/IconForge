@@ -1,5 +1,22 @@
 # Batch rendering
 
+> **AI agents:** for multiple purposes on one asset, use `render_asset_set` via the [Machine API](MACHINE_API.md). This document covers the legacy expert `render-batch` command.
+
+## Machine API: `render_asset_set` (recommended for agents)
+
+```json
+{
+  "schema_version": 1,
+  "operation": "render_asset_set",
+  "asset": "assets/items/runic_sword.glb",
+  "outputs": ["inventory_icon", "shop_thumbnail", "equipment_preview"]
+}
+```
+
+Icon Studio inspects the source once, resolves each recipe, renders independently, validates each output, and returns one aggregate result. Valid outputs are preserved even if a sibling fails (`partial_success`).
+
+## Legacy expert: `render-batch`
+
 Batch rendering discovers supported sources recursively (`.glb`, `.gltf`, `.png`, `.jpg`, `.jpeg`, `.webp`), processes them independently, and continues after a source failure.
 
 ```bash
@@ -16,5 +33,4 @@ The batch result includes `summary.total`, `summary.success`, `summary.failed`, 
 
 ## Performance behavior
 
-The current implementation prioritizes correct resource lifetime and deterministic scene setup. Each 3D frame uses a temporary viewport and is freed after capture; it does not retain rendered images in a batch-wide array. Cache lookup avoids repeated work for unchanged sources. Parallel rendering is intentionally not enabled yet because shared Godot import/render state can make it less reliable than sequential processing.
-
+The current implementation prioritizes correct resource lifetime and deterministic scene setup. Each 3D frame uses a temporary viewport and is freed after capture. Cache lookup avoids repeated work for unchanged sources.

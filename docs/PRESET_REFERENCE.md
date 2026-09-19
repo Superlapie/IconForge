@@ -1,8 +1,10 @@
 # Preset reference
 
-Presets are reusable composition contracts. They should encode intent rather than an asset-specific accident.
+> **AI agents do not select presets.** In safe mode, send a `purpose` (e.g. `inventory_icon`) and Icon Studio resolves the correct preset internally. This document is for humans, contributors, and expert tooling.
 
-## Production presets
+Presets are reusable composition contracts — versioned production recipes with `preset_revision`. They encode intent rather than an asset-specific accident.
+
+## Production presets (internal recipes)
 
 | Preset | Intended use | Default output |
 | --- | --- | --- |
@@ -18,13 +20,15 @@ Presets are reusable composition contracts. They should encode intent rather tha
 | `shop_thumbnail` | Small shop grids | 128×128 transparent |
 | `neutral_asset_thumbnail` | Asset browser and smoke tests | 256×256 transparent |
 
-## Camera
+## Purpose → preset mapping (agent view)
+
+Agents send `purpose`; `RecipeResolver` chooses the preset from inspection morphology. Example: `inventory_icon` on an elongated 3D asset may resolve to `weapon` instead of `inventory_item`. The agent does not need to know.
+
+## Camera (expert)
 
 `projection` is `orthographic` or `perspective`. Camera values include yaw, pitch, roll, FOV, distance, orthographic size, target occupancy, padding, target, offset, zoom bounds, and `auto_frame`.
 
-Per-asset sidecars may also use `camera.min_zoom` and `camera.max_zoom` when a
-source model uses unusually small or large world units. These values are
-validated and remain part of the deterministic override configuration.
+Per-asset sidecars may also use `camera.min_zoom` and `camera.max_zoom` for unusual world-unit scales. Sidecars are inherited by future safe-mode agent calls.
 
 Orientation strategies are predictable geometric heuristics: `preserve`, `longest_axis_diagonal`, `upright`, `weapon_diagonal`, `shield_frontal`, `potion_three_quarter`, `helmet_three_quarter`, `creature_portrait`, and `character_full_body`.
 

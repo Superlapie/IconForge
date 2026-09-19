@@ -1,6 +1,23 @@
 # Output manifest
 
-When enabled, batch rendering writes a JSON manifest at the requested path (default: `<output>/manifest.json`). Its shape is:
+Manifests are the **production audit record** for agents and humans. Do not reverse-engineer PNG state — read the manifest.
+
+## Machine API manifests
+
+Every successful `render_asset` or `render_asset_set` entry writes a manifest to `generated/manifests/<job_id>.json` containing:
+
+- `job_id`, `operation`, `purpose`, `source`, `source_hash`
+- `recipe` (`id` + `revision`)
+- `inspection_summary`, `resolution_reasons`
+- `correction` history, `quality` metrics
+- `output` path and SHA-256
+- `trace` (render state machine path)
+
+Use `explain_result` with a `job_id` to retrieve deterministic traceability.
+
+## Legacy batch manifests
+
+When enabled, expert `render-batch` writes a JSON manifest at the requested path (default: `<output>/manifest.json`):
 
 ```json
 {
@@ -25,4 +42,3 @@ When enabled, batch rendering writes a JSON manifest at the requested path (defa
 ```
 
 JSON configuration and manifests are written through atomic temp-file replacement. The source is never an output target.
-

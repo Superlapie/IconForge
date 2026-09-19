@@ -1,22 +1,36 @@
 # CLI reference
 
+> **AI agents:** use the [Machine API](MACHINE_API.md), not raw CLI commands. This reference documents the `iconstudio` transport layer.
+
 All commands are available through `./scripts/iconstudio`. Add `--json` to receive one machine-readable object. Exit codes:
 
 - `0`: success.
 - `2`: invalid command, argument, source, preset, or input JSON.
 - `3`: render or output quality failure.
-- `4`: batch had both successes and failures.
+- `4`: batch had both successes and failures (or `needs_review` / `partial_success` from API).
 - `127`: Godot executable was not found by the wrapper.
 
-## Machine API (recommended for agents)
+## Machine API (primary interface for agents)
 
 ```bash
 ./scripts/iconstudio api --request request.json --json
 ```
 
-See [MACHINE_API.md](MACHINE_API.md). Safe-mode agents send semantic requests (`purpose`, not `yaw`/`fov`). Expert mode: add `--expert`.
+Safe-mode agents send semantic requests (`purpose`, not `yaw`/`fov`). Expert mode: add `--expert`.
 
-## Legacy / expert commands
+| Operation | Purpose |
+|-----------|---------|
+| `capabilities` | Discover operations, purposes, extensions |
+| `schema` | Executable field definitions and error codes |
+| `render_asset` | Single validated production render |
+| `render_asset_set` | Multiple purposes from one source |
+| `inspect_asset` | Deterministic source inspection |
+| `validate_output` | Validate existing PNG against purpose contract |
+| `explain_result` | Audit trace from job ID or manifest |
+
+See [MACHINE_API.md](MACHINE_API.md) and [AGENTS.md](../AGENTS.md).
+
+## Legacy / expert commands (humans and debugging)
 
 ```text
 inspect SOURCE [--json]
@@ -32,20 +46,23 @@ compare FIRST.png SECOND.png
 validate-output IMAGE.png [--preset ID] [--occupancy FLOAT]
 ```
 
-## Common render flags
+**Do not teach normal agents to use these.** They expose renderer internals that safe mode deliberately hides.
+
+## Common render flags (expert only)
 
 `--preset`, `--output`, `--force`, `--override`, `--width`, `--height`, `--yaw`, `--pitch`, `--roll`, `--occupancy`, `--padding`, `--scale`, `--vertical-offset`, `--horizontal-offset`, and `--background`.
 
-Supported background values are `transparent`, `solid`, and `gradient`. Output format is currently PNG.
-
 ## Examples
+
+**Agent (recommended):**
+
+```bash
+./scripts/iconstudio api --request examples/render_inventory.json --json
+```
+
+**Expert:**
 
 ```bash
 ./scripts/iconstudio inspect fixtures/sword.gltf --json
 ./scripts/iconstudio render fixtures/sword.gltf --preset weapon --output out/sword.png --json
-./scripts/iconstudio presets --json
-./scripts/iconstudio validate-preset presets/weapon.json --json
-./scripts/iconstudio schema --json
-./scripts/iconstudio compare out/a.png out/b.png --json
 ```
-

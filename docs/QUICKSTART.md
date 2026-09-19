@@ -1,22 +1,47 @@
 # Quickstart
 
-## 1. Start the GUI
+## For AI agents (start here)
+
+Icon Studio is built for autonomous agents. Use the semantic machine API:
+
+```bash
+./scripts/iconstudio api --request examples/render_inventory.json --json
+```
+
+```json
+{
+  "schema_version": 1,
+  "operation": "render_asset",
+  "asset": "fixtures/sword.gltf",
+  "purpose": "inventory_icon"
+}
+```
+
+Discover supported operations and purposes:
+
+```bash
+./scripts/iconstudio api --request <(printf '%s' '{"schema_version":1,"operation":"capabilities"}') --json
+```
+
+Read [AGENTS.md](../AGENTS.md) and [MACHINE_API.md](MACHINE_API.md) for the full contract.
+
+## For humans: GUI
 
 ```bash
 ./scripts/launch-gui
 ```
 
-Drop a `.glb`, `.gltf`, `.png`, `.jpg`, or `.webp` into the source panel, choose a preset, orbit or zoom the preview, and export a PNG. The fixture models are preloaded when available so a fresh checkout has an immediate example.
+Drop a `.glb`, `.gltf`, `.png`, `.jpg`, or `.webp` into the source panel, choose a preset, orbit or zoom the preview, and export a PNG.
 
-## 2. Inspect a source
+## For experts: legacy CLI
+
+### Inspect a source
 
 ```bash
 ./scripts/iconstudio inspect fixtures/sword.gltf --json
 ```
 
-Inspection reports dimensions, center, AABB, meshes, materials, triangles, skeleton/animation flags, dependencies, and a suggested geometric orientation.
-
-## 3. Render one source
+### Render one source
 
 ```bash
 ./scripts/iconstudio render fixtures/sword.gltf \
@@ -26,9 +51,7 @@ Inspection reports dimensions, center, AABB, meshes, materials, triangles, skele
   --json
 ```
 
-The result contains the output path, quality metrics, warnings, and number of auto-framing passes.
-
-## 4. Render a directory
+### Render a directory
 
 ```bash
 ./scripts/iconstudio render-batch fixtures \
@@ -38,9 +61,10 @@ The result contains the output path, quality metrics, warnings, and number of au
   --json
 ```
 
-## 5. Run the quality gate
+## Quality gate
 
 ```bash
 ./scripts/quality-gate
 ```
 
+Includes machine API smoke tests and adversarial request validation.

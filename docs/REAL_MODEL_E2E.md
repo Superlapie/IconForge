@@ -1,5 +1,7 @@
 # Real-model E2E proof
 
+> This is a **production evidence** test for humans and CI. AI agents normally integrate through the [Machine API](MACHINE_API.md) and do not run this script directly.
+
 The procedural files in `fixtures/` are useful for fast unit and smoke tests,
 but they are not sufficient evidence for production asset loading. The
 canonical externally authored-model proof is:

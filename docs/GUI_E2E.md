@@ -1,5 +1,7 @@
 # GUI drag/drop E2E proof
 
+> **AI agents** integrate through the [Machine API](MACHINE_API.md), not the GUI. This E2E validates the human-facing drop boundary.
+
 Icon Studio accepts operating-system file drops through the main Godot
 `Window.files_dropped` boundary. The callback normalizes file URIs, filters
 supported sources, deduplicates the source list, selects the first accepted

@@ -1,22 +1,63 @@
 # Icon Studio
 
 [![Godot 4.x](https://img.shields.io/badge/Godot-4.x-478CBF?logo=godotengine&logoColor=white)](https://godotengine.org/)
+[![AI-agent first](https://img.shields.io/badge/AI--agent-first-8b5cf6)](#for-ai-agents)
 [![License: PolyForm Noncommercial](https://img.shields.io/badge/License-PolyForm%20Noncommercial-orange.svg)](LICENSE)
 [![Commercial license available](https://img.shields.io/badge/commercial%20use-contact%20author-blue.svg)](COMMERCIAL.md)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Offline & deterministic](https://img.shields.io/badge/offline-deterministic-2ea043)](#quality-gate)
 
-**Community-built Godot tooling for consistent game icons and thumbnails at content scale.**
+**A deterministic, offline content service built for AI agents — with a human GUI on the same render core.**
 
-Icon Studio is a standalone Godot 4.x application for turning 3D and static source assets into production-ready PNG imagery. It is offline-first, deterministic, and designed so an AI agent can operate the same render services as a human using the GUI.
+Icon Studio turns GLB/glTF models and static images into production-ready PNG game imagery. It is designed so a **mediocre or imperfect AI agent** can specify *what* it wants (`inventory_icon`, `shop_thumbnail`, `npc_portrait`) and receive only:
+
+1. **validated correct output**, or
+2. **deterministically auto-corrected + validated output**, or
+3. **`needs_review` / `failed`** with structured recovery guidance
+
+There is no normal path where an agent misunderstands the tool, gets `success: true`, and quietly produces garbage.
 
 ![Icon Studio GUI — live preview, preset inspector, and export workflow](docs/assets/icon-studio-ui.png)
 
+## For AI agents
+
+**Start here:**
+
+| Document | Purpose |
+|----------|---------|
+| [AGENTS.md](AGENTS.md) | Canonical agent integration guide (read this first) |
+| [docs/MACHINE_API.md](docs/MACHINE_API.md) | Semantic machine API contract |
+| [docs/AI_WORKFLOW.md](docs/AI_WORKFLOW.md) | Step-by-step agent workflow |
+| [examples/enigma_client.py](examples/enigma_client.py) | Minimal Python client wrapper |
+
+**Normal agent request** — specify intent, not renderer internals:
+
+```json
+{
+  "schema_version": 1,
+  "operation": "render_asset",
+  "asset": "fixtures/sword.gltf",
+  "purpose": "inventory_icon"
+}
+```
+
+```bash
+./scripts/iconstudio api --request examples/render_inventory.json --json
+```
+
+Discover everything from the tool itself:
+
+```bash
+./scripts/iconstudio api --request <(echo '{"schema_version":1,"operation":"capabilities"}') --json
+```
+
+Agents should **not** normally send `yaw`, `pitch`, `fov`, `occupancy`, arbitrary output paths, or preset IDs. Icon Studio owns those decisions. See [docs/MACHINE_API.md](docs/MACHINE_API.md).
+
 ## Built for Enigma
 
-This tool was extracted from the content pipeline for **Enigma**, my Godot 3D MMO project. Inventory grids, equipment previews, shop thumbnails, and portrait frames all need the same framing, lighting, and alpha behavior — Icon Studio is the shared render core that makes that repeatable.
+This tool was extracted from the content pipeline for **Enigma**, my Godot 3D MMO project. Inventory grids, equipment previews, shop thumbnails, and portrait frames all need the same framing, lighting, and alpha behavior — Icon Studio is the shared render core that makes that repeatable for both **human artists and autonomous agents**.
 
-The repo has **no runtime dependency** on the game itself: it ships as a standalone studio with its own CLI, presets, validation, and GUI. If you are building a Godot game with lots of item or character art, you can adopt Icon Studio without touching Enigma.
+The repo has **no runtime dependency** on the game itself: it ships as a standalone studio with its own machine API, CLI, presets, validation, and GUI. If you are building a Godot game with lots of item or character art, you can adopt Icon Studio without touching Enigma.
 
 Related open tooling from the same ecosystem: [VFX Forge](https://github.com/Superlapie/VFXForgeEnigma) for real-time VFX authoring.
 
@@ -32,49 +73,57 @@ If Icon Studio saves you time on your Godot project, a star, a preset contributi
 
 ## Launch
 
-GUI:
-
-```bash
-./scripts/launch-gui
-```
-
-Machine API (recommended for AI agents):
+**AI agents / automation (recommended):**
 
 ```bash
 ./scripts/iconstudio api --request examples/render_inventory.json --json
 ```
 
-Legacy expert CLI:
+**Human GUI:**
 
 ```bash
-./scripts/iconstudio presets --json
+./scripts/launch-gui
+```
+
+**Expert / legacy CLI** (debugging, humans, authorized tooling — not normal agent use):
+
+```bash
 ./scripts/iconstudio render fixtures/sword.gltf --preset weapon --output out/sword.png --force --json
 ```
 
-See [docs/MACHINE_API.md](docs/MACHINE_API.md).
-
 The included `scripts/iconstudio` wrapper uses a local Godot binary when present and uses `xvfb-run` for software OpenGL batch rendering on headless Linux machines. Set `ICONSTUDIO_GODOT` to use another Godot 4.x executable.
+
+## What agents get
+
+- **Semantic machine API** — `render_asset`, `render_asset_set`, `inspect_asset`, `validate_output`, `capabilities`, `schema`
+- **Strict request validation** — unknown fields rejected; deterministic error codes with `recommended_action`
+- **Purpose registry** — `inventory_icon`, `shop_thumbnail`, `equipment_preview`, portrait purposes, and more
+- **Deterministic recipe resolution** — inspection morphology → internal preset (agent does not choose)
+- **Bounded auto-correction** — finite framing passes; `needs_review` when contract cannot be met
+- **Transactional output** — validate before commit; failed renders never overwrite valid artifacts
+- **Idempotent job identity** — repeated identical requests reuse cached validated output
+- **First-class manifests** — full audit trail at `generated/manifests/`
+- **Filesystem safety** — safe mode writes only under `generated/`; path traversal rejected
 
 ## Included workflows
 
 - GLB/glTF inspection and rendering through Godot’s native importer.
 - PNG, JPEG, and WebP static-image fitting, background, outline, shadow, and resize workflow.
-- Versioned JSON presets with migration, validation, schema discovery, and user preset creation.
+- Versioned JSON presets with `preset_revision` for reproducible production recipes.
 - Auto-framing based on inspected AABB plus bounded rendered-silhouette correction.
-- Orthographic and perspective cameras, predictable orientation strategies, deterministic key/fill/rim lighting, transparent/solid/gradient backgrounds, post-processing, outlines, and presentation layers.
-- Asset-specific `<source_name>.icon.json` overrides, cache keys, safe atomic writes, batch isolation, and JSON manifests.
-- GUI source list, drag-and-drop, preset picker, preview orbit/zoom, structured transform controls, sidecar save, and PNG export.
+- Asset-specific `<source_name>.icon.json` sidecars inherited by future safe-mode agent calls.
+- GUI source list, drag-and-drop, preset picker, preview orbit/zoom, and PNG export (expert mode).
 
 ## Architecture
 
-The project has no cloud service and no internal AI model. Its reusable core is organized as:
+The project has no cloud service and no internal AI model. Its reusable core is:
 
 ```text
-source loading → inspection → render scene → framing/camera → lighting
-→ image processing → quality checks → PNG export → manifest/cache
+agent request → ApiService → inspect → resolve recipe → render → measure
+→ bounded auto-correct → validate → commit → manifest
 ```
 
-Both the GUI and CLI call the same shared `RenderService`. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [AGENTS.md](AGENTS.md).
+Both the machine API and GUI call the same shared `RenderService`. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [AGENTS.md](AGENTS.md).
 
 ## Quality gate
 
@@ -82,30 +131,31 @@ Both the GUI and CLI call the same shared `RenderService`. See [docs/ARCHITECTUR
 ./scripts/quality-gate
 ```
 
-It runs typed GDScript tests, validates all built-in presets, renders a fixture,
-validates its output, completes a fixture batch smoke test, and runs the
-real-authored-model and GUI drag/drop E2Es. Generated images and manifests are written under
-`out/` and are ignored by Git.
+It runs typed GDScript tests (including adversarial “dumb AI” API tests), validates all built-in presets, renders fixtures, runs machine API smoke tests, and completes real-model and GUI E2Es. Generated images are written under `out/` and `generated/` and are ignored by Git.
 
-For production-oriented proof against real authored GLB assets, run:
+For production-oriented proof against real authored GLB assets:
 
 ```bash
 ./scripts/real-model-e2e
 ```
 
-The real-model proof uses pinned, openly licensed Khronos glTF samples and
-writes its inspect/render/validation JSON plus PNG evidence to `out/e2e-real/`.
-See [docs/REAL_MODEL_E2E.md](docs/REAL_MODEL_E2E.md).
-
-For the full native OS drag/drop protocol proof on Linux/X11, see
-[docs/GUI_E2E.md](docs/GUI_E2E.md).
+See [docs/REAL_MODEL_E2E.md](docs/REAL_MODEL_E2E.md) and [docs/GUI_E2E.md](docs/GUI_E2E.md).
 
 ## Documentation
 
+**For AI agents (read these first):**
+
+- [AGENTS.md](AGENTS.md) — canonical agent guide
+- [Machine API](docs/MACHINE_API.md) — semantic request/response contract
+- [AI workflow](docs/AI_WORKFLOW.md) — discover, render, recover from failures
+- [Enigma client example](examples/enigma_client.py)
+
+**For humans and expert tooling:**
+
 - [Quickstart](docs/QUICKSTART.md)
 - [CLI reference](docs/CLI_REFERENCE.md)
-- [AI / machine workflow](docs/AI_WORKFLOW.md)
 - [Preset reference](docs/PRESET_REFERENCE.md)
+- [Architecture](docs/ARCHITECTURE.md)
 - [Contributing](CONTRIBUTING.md)
 - [Commercial licensing](COMMERCIAL.md)
 

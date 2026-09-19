@@ -1,5 +1,7 @@
 # Architecture
 
+> **AI-agent-first design.** The machine API (`ApiService`) is the primary integration surface. The GUI and expert CLI are secondary transports over the same render core.
+
 ## Boundaries
 
 ```text
@@ -23,6 +25,17 @@ StudioUi             human-facing controls over the same services
 
 The machine API sits **above** core render services. CLI `api` commands and future transports call `ApiService.execute()`. The GUI and legacy CLI expert commands may call `RenderService` directly. All paths share inspection, presets, framing, quality, cache, and manifests.
 
+## Agent render flow
+
+```text
+RECEIVED → VALIDATED_REQUEST → INSPECTED → RECIPE_RESOLVED → RENDERED
+→ MEASURED → CORRECTED (0..N) → VALIDATED_OUTPUT → COMMITTED → COMPLETED
+```
+
+Terminal states: `COMPLETED`, `NEEDS_REVIEW`, `FAILED`.
+
+Agents send `purpose`; `RecipeResolver` chooses the preset. Agents never need renderer knowledge in safe mode.
+
 ## Render lifetime
 
 Each 3D render creates a temporary `SubViewport`, stage, imported instance, camera, environment, and deterministic key/fill/rim lights. The stage captures at supersampled resolution, then is freed. Static sources take a separate fit/contain/cover route before shared post-processing.
@@ -33,5 +46,4 @@ There is no random camera or lighting choice. The effective preset is the resolv
 
 ## Extension points
 
-New output formats, turntables, multi-object compositions, material overrides, and atlas exporters should be added behind `RenderService`/`BatchService` contracts. Do not introduce an alternate command-specific render implementation.
-
+New output formats, turntables, multi-object compositions, material overrides, and atlas exporters should be added behind `RenderService`/`BatchService`/`ApiService` contracts. Do not introduce an alternate command-specific render implementation.

@@ -1,13 +1,24 @@
 # Machine API
 
-Icon Studio exposes a **semantic safe-mode API** for AI agents and Enigma tooling. Agents specify **what** they want; Icon Studio owns rendering decisions.
+> **Primary interface for AI agents.** Icon Studio is built so autonomous agents integrate through this API — not by scraping terminal output or guessing renderer parameters.
+
+Icon Studio exposes a **semantic safe-mode API**. Agents specify **what** they want; Icon Studio owns rendering decisions.
+
+## Who this is for
+
+- Enigma content pipeline workers
+- Cursor / Copilot / custom coding agents
+- CI/CD and batch automation
+- Any tool that needs deterministic, validated game imagery without renderer expertise
+
+Humans and debuggers may use the GUI or expert CLI. **Normal agent integration starts here.**
 
 ## Normal workflow
 
 Discover capabilities:
 
 ```bash
-echo '{"schema_version":1,"operation":"capabilities"}' | ./scripts/iconstudio api --stdin --json
+./scripts/iconstudio api --request <(printf '%s' '{"schema_version":1,"operation":"capabilities"}') --json
 ```
 
 Render a single asset:
@@ -59,6 +70,18 @@ Render multiple outputs from one source (inspected once, rendered independently)
   "occupancy": 0.84
 }
 ```
+
+The good path is dramatically easier than the bad path. Unknown fields are rejected, not silently ignored.
+
+## Safety guarantees
+
+An imperfect agent should only produce:
+
+1. **validated correct output**
+2. **deterministically auto-corrected + validated output**
+3. **`needs_review` / `failed`** with `recommended_action`
+
+There is no normal path to `success: true` with invalid output.
 
 ## Operations (safe mode)
 
@@ -123,8 +146,6 @@ Icon Studio resolves the internal preset (e.g. `weapon` vs `inventory_item`) fro
 
 Every failure includes `code` and `recommended_action` (e.g. `provide_supported_source`, `manual_composition_review`). Agents should not infer recovery from prose.
 
-Unknown fields, invalid enums, and path traversal are **rejected** — never silently ignored.
-
 ## Expert mode
 
 Low-level control (`preset`, `yaw`, arbitrary `output` paths) is available via `render_expert` with `--expert`:
@@ -133,11 +154,11 @@ Low-level control (`preset`, `yaw`, arbitrary `output` paths) is available via `
 ./scripts/iconstudio api --request expert_render.json --expert --json
 ```
 
-Expert mode is for GUI parity, debugging, and authorized tooling — not normal Enigma agent calls.
+Expert mode is for GUI parity, debugging, and authorized tooling — **not normal agent calls**.
 
 ## Enigma client
 
-See `examples/enigma_client.py` for a minimal Python wrapper. Transport can later change to a persistent worker without changing the request contract.
+See [examples/enigma_client.py](../examples/enigma_client.py) for a minimal Python wrapper. Transport can later change to a persistent worker without changing the request contract.
 
 ## Filesystem safety
 
@@ -150,3 +171,9 @@ Human corrections in `<source>.icon.json` are loaded automatically. Future safe-
 ## Idempotency
 
 Repeated identical requests reuse validated cached output (`cache_hit: true`) and the same deterministic destination path.
+
+## Related docs
+
+- [AGENTS.md](../AGENTS.md) — canonical agent integration guide
+- [AI_WORKFLOW.md](AI_WORKFLOW.md) — step-by-step workflow
+- [ARCHITECTURE.md](ARCHITECTURE.md) — how the API sits above render services

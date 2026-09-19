@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Icon Studio"
-config/description="Deterministic AI-first game icon and thumbnail production studio"
+config/description="AI-agent-first deterministic game icon and thumbnail production service with semantic machine API"
 run/main_scene="res://app/main.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 

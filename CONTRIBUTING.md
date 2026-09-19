@@ -1,8 +1,17 @@
 # Contributing to Icon Studio
 
-Icon Studio is a **community-built** tool. It started as production infrastructure for **Enigma**, a Godot 3D MMO game, and is now maintained in the open so other Godot teams can ship consistent inventory art, shop thumbnails, and UI imagery at scale.
+Icon Studio is a **community-built, AI-agent-first** tool. It started as production infrastructure for **Enigma**, a Godot 3D MMO game, and is maintained in the open so other Godot teams — and the agents that serve them — can ship consistent inventory art, shop thumbnails, and UI imagery at scale.
 
-Pull requests that improve reliability, preset quality, documentation, or machine-facing workflows are welcome. I review good PRs promptly and would rather merge thoughtful community work than keep this as a solo project.
+Pull requests that improve reliability, preset quality, **machine API safety**, documentation, or agent-facing workflows are welcome.
+
+## If you are an AI agent modifying this repo
+
+Read [AGENTS.md](AGENTS.md) first. Preserve the machine API contract:
+
+- Safe-mode agents specify `purpose`, not renderer internals.
+- Unknown request fields must be rejected.
+- `success: true` must mean validated production output.
+- Run `./scripts/quality-gate` (includes adversarial API tests).
 
 ## Licensing and contributions
 
@@ -26,18 +35,19 @@ Commercial use of Icon Studio itself still requires a separate commercial licens
 
 3. Keep changes focused. Prefer extending shared services in `core/` over one-off GUI or CLI shortcuts.
 4. Never overwrite source models or images in fixtures or tests.
-5. Use `--json` for any CLI changes that affect machine workflows.
+5. Machine API changes must update `core/api/api_schema.gd` (executable schema) and [docs/MACHINE_API.md](docs/MACHINE_API.md).
 
 ## Great first contributions
 
+- Machine API tests, error codes, or clearer `recommended_action` values.
 - Preset tuning or new data-only presets in `presets/` (validate with `./scripts/iconstudio validate-preset`).
-- Documentation fixes, examples, and clearer error messages.
-- Quality checks, test coverage, and E2E stability on Linux headless CI.
-- Bug fixes with a reproducible fixture or real-model E2E case.
+- Documentation for agent integrators ([AGENTS.md](AGENTS.md), [MACHINE_API.md](docs/MACHINE_API.md)).
+- Quality checks, adversarial request tests, and E2E stability on Linux headless CI.
 
 ## Pull request checklist
 
 - [ ] `./scripts/quality-gate` passes (or you explain why a subset is sufficient).
+- [ ] Machine API schema and docs stay in sync for any API changes.
 - [ ] CLI JSON output remains stable for existing commands, or the change is documented.
 - [ ] New presets pass `./scripts/iconstudio validate-preset`.
 - [ ] No secrets, credentials, or proprietary assets are added.
@@ -48,4 +58,4 @@ Be direct, be kind, and optimize for maintainability. Disagreement is fine; hara
 
 ## Questions
 
-Open a [Discussion](https://github.com/Superlapie/IconStudioEnigma/discussions) for design questions, preset ideas, or integration help. Use [Issues](https://github.com/Superlapie/IconStudioEnigma/issues) for reproducible bugs and feature requests.
+Open a [Discussion](https://github.com/Superlapie/IconStudioEnigma/discussions) for design questions, preset ideas, or agent integration help. Use [Issues](https://github.com/Superlapie/IconStudioEnigma/issues) for reproducible bugs and feature requests.

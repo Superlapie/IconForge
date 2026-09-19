@@ -1,9 +1,17 @@
 # Preset schema
 
-Canonical schema version is `1`. The authoritative machine description is returned by:
+> **AI agents:** discover the machine API schema with `{"operation":"schema"}`, not preset JSON. Preset schema is for contributors and expert tooling.
+
+Canonical preset schema version is `1`. The authoritative preset description for expert CLI is:
 
 ```bash
 ./scripts/iconstudio schema --json
+```
+
+The machine API schema (operations, purposes, request fields) is separate and returned by:
+
+```bash
+./scripts/iconstudio api --request <(printf '%s' '{"schema_version":1,"operation":"schema"}') --json
 ```
 
 Minimal valid preset:
@@ -11,6 +19,7 @@ Minimal valid preset:
 ```json
 {
   "schema_version": 1,
+  "preset_revision": 1,
   "id": "my_item",
   "display_name": "My Item",
   "description": "A reusable item composition.",
@@ -29,12 +38,15 @@ Minimal valid preset:
   },
   "lighting": {"rig": "neutral_studio"},
   "environment": {"background": "transparent"},
-  "shadows": {"mode": "contact"},
   "post_process": {"alpha_threshold": 0.01},
-  "composition": {"center_mode": "aabb", "scale": 1},
-  "output": {"format": "png", "transparent": true, "name_pattern": "{source_name}.png"}
+  "output": {"format": "png", "transparent": true}
 }
 ```
 
-Missing optional nested fields are filled from `PresetDefinition.default_data`. Invalid ranges are rejected: resolution 16–8192, supersampling 1–8, occupancy 0.05–0.99, padding 0–0.45, FOV 5–170, and zoom bounds must be ordered. Legacy flat camera fields are migrated into the `camera` object and normalized to schema 1.
+Validate before committing:
 
+```bash
+./scripts/iconstudio validate-preset presets/my_item.json --json
+```
+
+Increment `preset_revision` when rendering semantics change materially. Manifests record the revision that produced each output.
