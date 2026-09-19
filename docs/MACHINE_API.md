@@ -98,9 +98,16 @@ Morphology (elongated, flat, tall, etc.) affects orientation only — not semant
 
 ## Human sidecars
 
-Durable `<source>.icon.json` corrections win over agent hints.
+Durable `<source>.icon.json` corrections are a **human/maintainer** mechanism. They win over agent hints. Safe-mode callers must not invent sidecar fields, camera values, or lighting.
 
-If a sidecar exists and cannot be parsed or fails strict field validation, the render **stops** with `OVERRIDE_INVALID`. Invalid human corrections are never silently ignored.
+Sidecar JSON is **recursively strict**. Unknown keys are rejected at every nesting level, including `camera`, `lighting`, `composition`, and `environment`. A typo such as `"ocupancy"` or `"lighting.key.energy"` fails closed.
+
+Canonical lighting keys (human sidecars only; not part of the safe Machine API):
+
+- `lighting.rig`, `lighting.ambient_energy`
+- `lighting.key` / `fill` / `rim`: `angle`, `intensity`, `color`, `shadow`
+
+If a sidecar exists and cannot be parsed or fails validation, the render **stops** with `OVERRIDE_INVALID` and `recommended_action: fix_human_sidecar`. Invalid human corrections are never silently ignored, and they never overwrite an existing valid artifact.
 
 ## Output locations
 

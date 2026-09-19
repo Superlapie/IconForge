@@ -30,6 +30,8 @@ Agents send `purpose`; `RecipeResolver` chooses the preset from inspection morph
 
 Per-asset sidecars may also use `camera.min_zoom` and `camera.max_zoom` for unusual world-unit scales. Sidecars are inherited by future safe-mode agent calls.
 
+Sidecars are recursively strict: unknown nested keys (including lighting) fail with `OVERRIDE_INVALID`. Lighting is a human/maintainer correction surface, not a safe Machine API field. Allowed lighting keys are defined once in `OverrideService.LIGHTING_SCHEMA`: `rig`, `ambient_energy`, and `key`/`fill`/`rim` with `angle`, `intensity`, `color`, and `shadow`.
+
 Orientation strategies are predictable geometric heuristics: `preserve`, `longest_axis_diagonal`, `upright`, `weapon_diagonal`, `shield_frontal`, `potion_three_quarter`, `helmet_three_quarter`, `creature_portrait`, and `character_full_body`.
 
 ## Presentation separation

@@ -597,6 +597,12 @@ func _terminal_failure(operation: String, error: Dictionary, trace: Array, job_i
 	var details: Dictionary = {"attempts": trace}
 	if not job_id.is_empty():
 		details["job_id"] = job_id
+	if error.has("path"):
+		details["path"] = error["path"]
+	if error.has("details"):
+		details["details"] = error["details"]
+	if error.has("field"):
+		details["field"] = error["field"]
 	return _Response.failure(operation, code, str(mapped.get("message", error.get("message", "Operation failed."))), details)
 
 func _terminal_review(operation: String, error: Dictionary, trace: Array, source_path: String, purpose_id: String, asset_id: String) -> Dictionary:

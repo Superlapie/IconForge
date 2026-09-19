@@ -39,6 +39,7 @@ func run() -> Dictionary:
 	await _scenario_force_collision_protection()
 	await _scenario_invalid_sidecar_fails_closed()
 	await _scenario_sidecar_typo_rejected()
+	await _scenario_sidecar_lighting_strictness()
 	await _scenario_source_mutation_invalidates_cache()
 	await _scenario_manifest_commit_failure_blocks_validated()
 	await _scenario_replace_failure_preserves_destination()
@@ -381,6 +382,84 @@ func _scenario_sidecar_typo_rejected() -> void:
 	})
 	_assert(not bool(result.get("success", true)), "sidecar typo blocks render")
 	_assert(str(result.get("code", "")) == "OVERRIDE_INVALID", "sidecar typo code")
+
+func _scenario_sidecar_lighting_strictness() -> void:
+	scenarios_run += 1
+	var temp_dir: String = repo_root.path_join("out/sidecar_light_%d" % Time.get_ticks_usec())
+	DirAccess.make_dir_recursive_absolute(temp_dir)
+	var sword: String = temp_dir.path_join("sword.gltf")
+	DirAccess.copy_absolute(repo_root.path_join("fixtures/sword.gltf"), sword)
+	var sidecar_path: String = overrides.sidecar_path(sword)
+	var first: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": sword,
+		"purpose": "inventory_icon",
+		"force": true,
+	})
+	_assert(bool(first.get("success", false)), "sidecar lighting baseline renders")
+	var output_path: String = str(first.get("output", {}).get("path", ""))
+	IconStudioFileUtil.write_json_atomic(sidecar_path, {
+		"lighting": {
+			"rig": "neutral_studio",
+			"ambient_energy": 0.5,
+			"key": {"angle": [-30.0, 45.0, 0.0], "intensity": 1.2, "color": [1.0, 0.93, 0.84, 1.0], "shadow": true},
+		},
+	})
+	var valid_light: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": sword,
+		"purpose": "inventory_icon",
+		"force": true,
+	})
+	_assert(bool(valid_light.get("success", false)) or str(valid_light.get("status", "")) == "needs_review", "valid lighting sidecar accepted")
+	var preserved_hash: String = IconStudioFileUtil.file_hash(output_path)
+	IconStudioFileUtil.write_json_atomic(sidecar_path, {"lighting": {"kee": {"angle": [-30.0, 45.0, 0.0]}}})
+	var misspelled: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": sword,
+		"purpose": "inventory_icon",
+		"force": true,
+	})
+	_assert_override_invalid(misspelled, "misspelled lighting field")
+	_assert(IconStudioFileUtil.file_hash(output_path) == preserved_hash, "misspelled lighting preserves output")
+	IconStudioFileUtil.write_json_atomic(sidecar_path, {"lighting": {"key": {"angle": [-30.0, 45.0, 0.0], "energy": 1.2}}})
+	var unknown_nested: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": sword,
+		"purpose": "inventory_icon",
+		"force": true,
+	})
+	_assert_override_invalid(unknown_nested, "unknown nested lighting field")
+	IconStudioFileUtil.write_json_atomic(sidecar_path, {"composition": {"bogus": 1}})
+	var unknown_object: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": sword,
+		"purpose": "inventory_icon",
+		"force": true,
+	})
+	_assert_override_invalid(unknown_object, "unknown nested object field")
+	IconStudioFileUtil.write_json_atomic(sidecar_path, {"lighting": {"key": {"angle": [0.0, "bad", 0.0]}}})
+	var malformed: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": sword,
+		"purpose": "inventory_icon",
+		"force": true,
+	})
+	_assert_override_invalid(malformed, "malformed lighting value")
+	_assert(FileAccess.file_exists(output_path), "invalid lighting sidecar does not delete output")
+	_assert(IconStudioFileUtil.file_hash(output_path) == preserved_hash, "invalid lighting sidecar leaves prior artifact")
+
+func _assert_override_invalid(result: Dictionary, label: String) -> void:
+	_assert(not bool(result.get("success", true)), "%s blocks render" % label)
+	_assert(str(result.get("code", "")) == "OVERRIDE_INVALID", "%s returns OVERRIDE_INVALID" % label)
+	_assert(str(result.get("recommended_action", "")) == "fix_human_sidecar", "%s includes recommended_action" % label)
+	_assert(str(result.get("status", "")) == "failed", "%s status is failed" % label)
 
 func _scenario_same_basename_collision() -> void:
 	scenarios_run += 1
