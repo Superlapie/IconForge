@@ -63,7 +63,12 @@ func run() -> Dictionary:
 	await _scenario_output_lock_crash_states()
 	await _scenario_review_queue_per_job_records()
 	await _scenario_source_changed_during_render()
+	await _scenario_source_changed_during_render_api()
 	await _scenario_rollback_preserves_backup()
+	await _scenario_manifest_rollback_recovery_path_surfaces()
+	await _scenario_recipe_review_persistence_contract()
+	await _scenario_external_gltf_dependency_provenance()
+	await _scenario_output_lock_linux_pid_reuse_reaped()
 	await _scenario_aggregate_manifest_write_failure()
 	await _scenario_workspace_exclusive_relative_path()
 	await _scenario_sidecar_value_validation()
@@ -74,6 +79,7 @@ func run() -> Dictionary:
 	IconForgeFileUtil.reset_test_seams()
 	api.manifest_service.reset_test_seams()
 	OutputLock.reset_test_seams()
+	ApiServiceScript.reset_test_seams()
 	AssetInspector.reset_inspect_count()
 	return {
 		"success": failures.is_empty(),
@@ -687,23 +693,39 @@ func _scenario_manifest_commit_failure_blocks_validated() -> void:
 
 func _scenario_manifest_rollback_failure_surfaces() -> void:
 	scenarios_run += 1
+	var sword: String = repo_root.path_join("fixtures/sword.gltf")
+	var asset_id: String = "rollback_failure_probe_%d" % Time.get_ticks_usec()
+	var baseline: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": sword,
+		"purpose": "inventory_icon",
+		"asset_id": asset_id,
+		"force": true,
+	})
+	if not bool(baseline.get("success", false)):
+		_assert(false, "rollback failure baseline render")
+		return
+	var output_path: String = str(baseline["output"]["path"])
+	var original_sha: String = str(baseline["output"]["sha256"])
 	IconForgeFileUtil.reset_test_seams()
 	api.manifest_service.reset_test_seams()
 	api.manifest_service.test_fail_restore_output = true
 	IconForgeFileUtil.test_write_json_atomic_error = ERR_CANT_CREATE
-	var sword: String = repo_root.path_join("fixtures/sword.gltf")
 	var result: Dictionary = await api.execute({
 		"schema_version": 1,
 		"operation": "render_asset",
 		"asset": sword,
 		"purpose": "inventory_icon",
-		"asset_id": "rollback_failure_probe_%d" % Time.get_ticks_usec(),
+		"asset_id": asset_id,
 		"force": true,
 	})
 	IconForgeFileUtil.reset_test_seams()
 	api.manifest_service.reset_test_seams()
 	_assert(not bool(result.get("success", true)), "rollback failure not validated")
 	_assert(str(result.get("code", "")) == "ROLLBACK_FAILED", "rollback failure code")
+	_assert(str(result.get("recommended_action", "")) == "manual_recovery_required", "rollback failure recommended action")
+	_assert(IconForgeFileUtil.file_hash(output_path) == original_sha, "rollback failure preserves committed output bytes")
 
 func _scenario_replace_failure_preserves_destination() -> void:
 	scenarios_run += 1
@@ -1052,6 +1074,206 @@ func _scenario_source_changed_during_render() -> void:
 	_assert(JobIdentity.source_snapshot_matches(source_path, original_hash, dependencies), "source snapshot matches before mutation")
 	DirAccess.copy_absolute(repo_root.path_join("fixtures/potion.gltf"), source_path)
 	_assert(not JobIdentity.source_snapshot_matches(source_path, original_hash, dependencies), "source snapshot detects mutation")
+
+func _scenario_source_changed_during_render_api() -> void:
+	scenarios_run += 1
+	ApiServiceScript.reset_test_seams()
+	var mutable_dir: String = repo_root.path_join("out/source_mutate_api_%d" % Time.get_ticks_usec())
+	DirAccess.make_dir_recursive_absolute(mutable_dir)
+	var source_path: String = mutable_dir.path_join("mutable.gltf")
+	DirAccess.copy_absolute(repo_root.path_join("fixtures/sword.gltf"), source_path)
+	var asset_id: String = "source_mutate_api_%d" % Time.get_ticks_usec()
+	var baseline: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": source_path,
+		"purpose": "inventory_icon",
+		"asset_id": asset_id,
+		"force": true,
+	})
+	if not bool(baseline.get("success", false)):
+		_assert(false, "source mutate api baseline render")
+		ApiServiceScript.reset_test_seams()
+		return
+	var output_path: String = str(baseline["output"]["path"])
+	var manifest_path: String = str(baseline.get("manifest", ""))
+	var owner_path: String = "%s.owner.json" % output_path
+	var original_output_sha: String = IconForgeFileUtil.file_hash(output_path)
+	var original_manifest_sha: String = IconForgeFileUtil.file_hash(manifest_path) if FileAccess.file_exists(manifest_path) else ""
+	ApiServiceScript.test_before_commit_snapshot = func(mutated_path: String) -> void:
+		DirAccess.copy_absolute(repo_root.path_join("fixtures/potion.gltf"), mutated_path)
+	var result: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": source_path,
+		"purpose": "inventory_icon",
+		"asset_id": asset_id,
+		"force": true,
+	})
+	ApiServiceScript.reset_test_seams()
+	_assert(not bool(result.get("success", true)), "source mutate api not validated")
+	_assert(str(result.get("status", "")) == "failed", "source mutate api failed status")
+	_assert(str(result.get("code", "")) == "SOURCE_CHANGED_DURING_RENDER", "source mutate api code")
+	_assert(str(result.get("recommended_action", "")) == "retry_same_request", "source mutate api recommended action")
+	_assert(IconForgeFileUtil.file_hash(output_path) == original_output_sha, "source mutate api preserves output bytes")
+	if not original_manifest_sha.is_empty():
+		_assert(IconForgeFileUtil.file_hash(manifest_path) == original_manifest_sha, "source mutate api preserves manifest bytes")
+	_assert(FileAccess.file_exists(owner_path), "source mutate api preserves owner record")
+
+func _scenario_manifest_rollback_recovery_path_surfaces() -> void:
+	scenarios_run += 1
+	var sword: String = repo_root.path_join("fixtures/sword.gltf")
+	var asset_id: String = "rollback_recovery_probe_%d" % Time.get_ticks_usec()
+	var baseline: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": sword,
+		"purpose": "inventory_icon",
+		"asset_id": asset_id,
+		"force": true,
+	})
+	if not bool(baseline.get("success", false)):
+		_assert(false, "rollback recovery baseline render")
+		return
+	var original_sha: String = str(baseline["output"]["sha256"])
+	IconForgeFileUtil.reset_test_seams()
+	api.manifest_service.reset_test_seams()
+	api.manifest_service.test_fail_restore_output = true
+	IconForgeFileUtil.test_write_json_atomic_error = ERR_CANT_CREATE
+	var result: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": sword,
+		"purpose": "inventory_icon",
+		"asset_id": asset_id,
+		"force": true,
+	})
+	IconForgeFileUtil.reset_test_seams()
+	api.manifest_service.reset_test_seams()
+	_assert(str(result.get("code", "")) == "ROLLBACK_FAILED", "rollback recovery code")
+	var recovery_path: String = str(result.get("recovery_backup_path", ""))
+	_assert(not recovery_path.is_empty(), "rollback recovery path surfaced at api boundary")
+	_assert(FileAccess.file_exists(recovery_path), "rollback recovery path exists")
+	_assert(IconForgeFileUtil.file_hash(recovery_path) == original_sha, "rollback recovery path matches original output sha")
+
+func _scenario_recipe_review_persistence_contract() -> void:
+	scenarios_run += 1
+	ApiServiceScript.reset_test_seams()
+	ApiServiceScript.test_recipe_resolution_error = {
+		"code": "RECIPE_RESOLUTION_FAILED",
+		"message": "Injected recipe resolution failure for contract test.",
+	}
+	var sword: String = repo_root.path_join("fixtures/sword.gltf")
+	var result: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": sword,
+		"purpose": "inventory_icon",
+		"asset_id": "recipe_review_contract_%d" % Time.get_ticks_usec(),
+		"force": true,
+	})
+	ApiServiceScript.reset_test_seams()
+	_assert(str(result.get("status", "")) == "needs_review", "recipe review status")
+	_assert(not str(result.get("job_id", "")).is_empty(), "recipe review job_id")
+	_assert(bool(result.get("review_persisted", false)), "recipe review persisted")
+	_assert(not str(result.get("review_path", "")).is_empty(), "recipe review path")
+	_assert(not str(result.get("manifest", "")).is_empty(), "recipe review manifest")
+	_assert(FileAccess.file_exists(str(result.get("review_path", ""))), "recipe review file exists")
+	_assert(FileAccess.file_exists(str(result.get("manifest", ""))), "recipe review manifest exists")
+
+func _scenario_external_gltf_dependency_provenance() -> void:
+	scenarios_run += 1
+	var dep_dir: String = repo_root.path_join("tests/e2e/assets/dependency")
+	var source_path: String = dep_dir.path_join("external.gltf")
+	var bin_path: String = dep_dir.path_join("external.bin")
+	var texture_path: String = dep_dir.path_join("texture.png")
+	_assert(FileAccess.file_exists(source_path), "external gltf fixture exists")
+	var dependencies: Array = JobIdentity.dependency_hashes(source_path)
+	var dep_text: String = "\n".join(PackedStringArray(dependencies))
+	_assert(dep_text.find(bin_path) >= 0, "external gltf tracks bin dependency")
+	_assert(dep_text.find(texture_path) >= 0, "external gltf tracks texture dependency")
+	var asset_id: String = "external_gltf_dep_%d" % Time.get_ticks_usec()
+	var first: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": source_path,
+		"purpose": "inventory_icon",
+		"asset_id": asset_id,
+		"force": true,
+	})
+	_assert(bool(first.get("success", false)), "external gltf first render")
+	var second: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": source_path,
+		"purpose": "inventory_icon",
+		"asset_id": asset_id,
+	})
+	_assert(bool(second.get("cache_hit", false)), "external gltf cache hit before dependency mutation")
+	var bin_backup: PackedByteArray = FileAccess.get_file_as_bytes(bin_path)
+	FileAccess.open(bin_path, FileAccess.WRITE).store_buffer(PackedByteArray([1, 2, 3, 4]))
+	var third: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": source_path,
+		"purpose": "inventory_icon",
+		"asset_id": asset_id,
+	})
+	FileAccess.open(bin_path, FileAccess.WRITE).store_buffer(bin_backup)
+	_assert(not bool(third.get("cache_hit", true)), "external bin mutation invalidates cache")
+	var texture_backup: PackedByteArray = FileAccess.get_file_as_bytes(texture_path)
+	FileAccess.open(texture_path, FileAccess.WRITE).store_buffer(PackedByteArray([9, 8, 7, 6]))
+	var fourth: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": source_path,
+		"purpose": "inventory_icon",
+		"asset_id": asset_id,
+	})
+	FileAccess.open(texture_path, FileAccess.WRITE).store_buffer(texture_backup)
+	_assert(not bool(fourth.get("cache_hit", true)), "external texture mutation invalidates cache")
+	ApiServiceScript.reset_test_seams()
+	ApiServiceScript.test_before_commit_snapshot = func(_mutated_path: String) -> void:
+		FileAccess.open(bin_path, FileAccess.WRITE).store_buffer(PackedByteArray([5, 5, 5, 5]))
+	var output_path: String = str(first["output"]["path"])
+	var output_sha: String = IconForgeFileUtil.file_hash(output_path)
+	var fifth: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": source_path,
+		"purpose": "inventory_icon",
+		"asset_id": asset_id,
+		"force": true,
+	})
+	FileAccess.open(bin_path, FileAccess.WRITE).store_buffer(bin_backup)
+	ApiServiceScript.reset_test_seams()
+	_assert(str(fifth.get("code", "")) == "SOURCE_CHANGED_DURING_RENDER", "external dependency mutation blocks commit")
+	_assert(IconForgeFileUtil.file_hash(output_path) == output_sha, "external dependency mutation preserves committed output")
+
+func _scenario_output_lock_linux_pid_reuse_reaped() -> void:
+	if OS.get_name() != "Linux":
+		return
+	scenarios_run += 1
+	OutputLock.reset_test_seams()
+	var OutputLockScript = load("res://core/api/output_lock.gd")
+	var path: String = repo_root.path_join("out/lock_pid_reuse_%d.png" % Time.get_ticks_usec())
+	var lock_dir: String = "%s.lock" % path
+	DirAccess.make_dir_recursive_absolute(lock_dir.get_base_dir())
+	DirAccess.make_dir_absolute(lock_dir)
+	var stale_ms: int = OutputLock._now_ms() - OutputLock.STALE_MS - 5000
+	IconForgeFileUtil.write_json_atomic(lock_dir.path_join("lease.json"), {
+		"token": "stale.reuse.token",
+		"pid": OS.get_process_id(),
+		"pid_start_ticks": OutputLock._current_process_start_ticks() - 999999,
+		"acquired_at_ms": stale_ms,
+		"heartbeat_at_ms": stale_ms,
+	})
+	var lock: RefCounted = OutputLockScript.new()
+	var result: Dictionary = lock.acquire(path, 500)
+	_assert(bool(result.get("success", false)), "linux pid reuse stale lease is reaped")
+	if lock.acquired:
+		lock.release()
+	OutputLock.reset_test_seams()
 
 func _scenario_rollback_preserves_backup() -> void:
 	scenarios_run += 1

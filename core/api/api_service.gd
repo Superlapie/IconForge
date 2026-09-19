@@ -46,6 +46,13 @@ var manifest_service: RefCounted
 var review_queue: RefCounted
 var overrides: OverrideService = OverrideService.new()
 
+static var test_before_commit_snapshot: Callable = Callable()
+static var test_recipe_resolution_error: Dictionary = {}
+
+static func reset_test_seams() -> void:
+	test_before_commit_snapshot = Callable()
+	test_recipe_resolution_error = {}
+
 func _init(workspace_root: String = "") -> void:
 	workspace = _Workspace.new(workspace_root)
 	manifest_service = _ManifestService.new(workspace.workspace_root)
@@ -126,7 +133,11 @@ func _render_asset_pipeline(request: Dictionary, safe_mode: bool, shared_context
 	if not bool(inspection.get("success", false)):
 		return _terminal_failure("render_asset", _mapped_error(inspection.get("error", {})), trace)
 
-	var recipe: Dictionary = recipe_resolver.resolve(purpose_id, inspection, hints)
+	var recipe: Dictionary = {}
+	if test_recipe_resolution_error.is_empty():
+		recipe = recipe_resolver.resolve(purpose_id, inspection, hints)
+	else:
+		recipe = {"success": false, "error": test_recipe_resolution_error.duplicate(true)}
 	state = RenderState.RECIPE_RESOLVED
 	trace.append(_state_entry(state, {"preset_id": recipe.get("preset_id", ""), "reasons": recipe.get("resolution_reasons", [])}))
 	if not bool(recipe.get("success", false)):
@@ -220,6 +231,9 @@ func _render_asset_pipeline(request: Dictionary, safe_mode: bool, shared_context
 	state = RenderState.VALIDATED_OUTPUT
 	trace.append(_state_entry(state))
 
+	if test_before_commit_snapshot.is_valid():
+		test_before_commit_snapshot.call(source_path)
+
 	if not _JobIdentity.source_snapshot_matches(source_path, source_hash, dependency_hashes):
 		_cleanup_temp(temp_path)
 		output_lock.release()
@@ -246,7 +260,11 @@ func _render_asset_pipeline(request: Dictionary, safe_mode: bool, shared_context
 		_cleanup_temp(temp_path)
 		output_lock.release()
 		var commit_err: Dictionary = commit_result.get("error", {"code": "WRITE_FAILED", "message": "Could not commit validated production bundle."})
-		return _Response.failure("render_asset", str(commit_err.get("code", "WRITE_FAILED")), str(commit_err.get("message", "Could not commit validated production bundle.")), {"job_id": job_id, "trace": trace})
+		var commit_details: Dictionary = {"job_id": job_id, "trace": trace}
+		for key in ["recovery_backup_path", "path", "godot_error"]:
+			if commit_err.has(key):
+				commit_details[key] = commit_err[key]
+		return _Response.failure("render_asset", str(commit_err.get("code", "WRITE_FAILED")), str(commit_err.get("message", "Could not commit validated production bundle.")), commit_details)
 
 	state = RenderState.COMMITTED
 	trace.append(_state_entry(state))
@@ -643,22 +661,11 @@ func _handle_quality_failure(operation: String, quality: Dictionary, trace: Arra
 		"trace": trace,
 	})
 
-	return {
-		"schema_version": _Schema.CURRENT_SCHEMA_VERSION,
-		"success": false,
-		"status": "needs_review",
-		"operation": operation,
-		"code": code,
-		"message": str(primary.get("message", "Quality validation failed.")),
-		"recommended_action": _ErrorCodes.recommended_action(code),
-		"job_id": job_id,
+	return _needs_review_response(operation, code, str(primary.get("message", "Quality validation failed.")), persistence, trace, {
 		"asset_id": asset_id,
 		"purpose": purpose_id,
-		"manifest": str(persistence.get("manifest", "")),
-		"review_persisted": bool(persistence.get("review_persisted", false)),
-		"attempts": trace,
 		"quality": quality,
-	}
+	})
 
 func _terminal_failure(operation: String, error: Dictionary, trace: Array, job_id: String = "") -> Dictionary:
 	var mapped: Dictionary = _mapped_error(error if error.has("code") else error)
@@ -682,12 +689,32 @@ func _persist_review_state(review_entry: Dictionary, manifest_payload: Dictionar
 		manifest_payload["job_id"] = job_id
 		manifest_result = manifest_service.write_manifest(job_id, manifest_payload)
 	return {
+		"job_id": job_id,
 		"review_persisted": bool(review_result.get("success", false)) and bool(manifest_result.get("success", false)),
 		"review_path": str(review_result.get("path", "")),
 		"manifest": str(manifest_result.get("path", "")) if bool(manifest_result.get("success", false)) else "",
 		"review_error": review_result.get("error", {}),
 		"manifest_error": manifest_result.get("error", {}),
 	}
+
+func _needs_review_response(operation: String, code: String, message: String, persistence: Dictionary, trace: Array, extra: Dictionary = {}) -> Dictionary:
+	var response: Dictionary = {
+		"schema_version": _Schema.CURRENT_SCHEMA_VERSION,
+		"success": false,
+		"status": "needs_review",
+		"operation": operation,
+		"code": code,
+		"message": message,
+		"recommended_action": _ErrorCodes.recommended_action(code),
+		"job_id": str(persistence.get("job_id", "")),
+		"manifest": str(persistence.get("manifest", "")),
+		"review_persisted": bool(persistence.get("review_persisted", false)),
+		"review_path": str(persistence.get("review_path", "")),
+		"attempts": trace,
+	}
+	for key in extra.keys():
+		response[key] = extra[key]
+	return response
 
 func _terminal_review(operation: String, error: Dictionary, trace: Array, source_path: String, purpose_id: String, asset_id: String) -> Dictionary:
 	var code: String = str(error.get("code", "RECIPE_RESOLUTION_FAILED"))
@@ -707,16 +734,10 @@ func _terminal_review(operation: String, error: Dictionary, trace: Array, source
 		"code": code,
 		"trace": trace,
 	})
-	return {
-		"schema_version": _Schema.CURRENT_SCHEMA_VERSION,
-		"success": false,
-		"status": "needs_review",
-		"operation": operation,
-		"code": code,
-		"message": str(error.get("message", "Recipe resolution failed.")),
-		"recommended_action": _ErrorCodes.recommended_action(code),
-		"attempts": trace,
-	}
+	return _needs_review_response(operation, code, str(error.get("message", "Recipe resolution failed.")), persistence, trace, {
+		"asset_id": asset_id,
+		"purpose": purpose_id,
+	})
 
 func _mapped_code(error: Dictionary) -> String:
 	return str(_Mapper.map_error(error).get("code", "INTERNAL_ERROR"))

@@ -136,12 +136,11 @@ func _holder_is_authoritative(lease: Dictionary, identity: Dictionary) -> bool:
 		return false
 	if OS.get_name() != "Linux":
 		return false
-	var pid: int = int(lease.get("pid", 0))
-	if pid == OS.get_process_id():
-		return true
 	var lease_start: int = int(lease.get("pid_start_ticks", -1))
 	var live_start: int = int(identity.get("start_ticks", -1))
-	return lease_start >= 0 and live_start >= 0 and lease_start == live_start
+	if lease_start >= 0 and live_start >= 0:
+		return lease_start == live_start
+	return false
 
 func _is_lease_stale(lease: Dictionary) -> bool:
 	var pid: int = int(lease.get("pid", 0))
@@ -197,7 +196,13 @@ static func _process_start_ticks(pid: int) -> int:
 	var stat_path: String = "/proc/%d/stat" % pid
 	if not FileAccess.file_exists(stat_path):
 		return -1
-	var stat_line: String = FileAccess.get_file_as_string(stat_path)
+	var file: FileAccess = FileAccess.open(stat_path, FileAccess.READ)
+	if file == null:
+		return -1
+	var stat_line: String = file.get_line()
+	file.close()
+	if stat_line.is_empty():
+		return -1
 	var close_paren: int = stat_line.rfind(")")
 	if close_paren < 0:
 		return -1
