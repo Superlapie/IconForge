@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -u
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+WORKSPACE="${ROOT}/out/client_e2e_workspace"
+rm -rf "$WORKSPACE"
+mkdir -p "$WORKSPACE"
+
+export ICONSTUDIO_WORKSPACE_ROOT="$WORKSPACE"
+
+python3 "$ROOT/examples/enigma_client.py" >/dev/null || exit 1
+
+python3 - <<'PY' "$ROOT"
+import json, sys
+from pathlib import Path
+from examples.enigma_client import IconStudioClient
+
+root = Path(sys.argv[1])
+client = IconStudioClient(workspace_root=root / "out/client_e2e_workspace")
+cap = client.capabilities()
+assert cap.get("success"), cap
+render = client.render_asset(str(root / "fixtures/sword.gltf"), "inventory_icon", force=True)
+assert render.get("success") and render.get("status") == "validated", render
+assert render.get("manifest"), "manifest required"
+assert str(render["output"]["path"]).startswith(str(root / "out/client_e2e_workspace")), render
+second = client.render_asset(str(root / "fixtures/sword.gltf"), "inventory_icon")
+assert second.get("cache_hit"), second
+assert second.get("manifest"), "cache hit must include manifest"
+print("PASS client-e2e")
+PY

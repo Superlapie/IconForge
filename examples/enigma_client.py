@@ -1,32 +1,43 @@
 #!/usr/bin/env python3
 """Minimal Enigma client for Icon Studio machine API.
 
-Transport: spawns the Icon Studio CLI and parses strict JSON responses.
-The semantic request/response contract is stable; transport can later change
-to a persistent worker, Unix socket, or named pipe without changing callers.
+Transport: temporary request file + `api --request FILE --json`.
+Workspace: pass Enigma root via workspace_root or ICONSTUDIO_WORKSPACE_ROOT.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
 
 class IconStudioClient:
-    def __init__(self, cli_path: str | Path | None = None) -> None:
+    def __init__(
+        self,
+        cli_path: str | Path | None = None,
+        workspace_root: str | Path | None = None,
+    ) -> None:
         root = Path(__file__).resolve().parents[1]
         self.cli = Path(cli_path) if cli_path else root / "scripts" / "iconstudio"
+        env_root = os.environ.get("ICONSTUDIO_WORKSPACE_ROOT", "")
+        self.workspace_root = Path(workspace_root) if workspace_root else (Path(env_root) if env_root else None)
 
     def _execute(self, request: dict[str, Any]) -> dict[str, Any]:
-        proc = subprocess.run(
-            [str(self.cli), "api", "--stdin", "--json"],
-            input=json.dumps(request),
-            text=True,
-            capture_output=True,
-            check=False,
-        )
+        cmd = [str(self.cli), "api", "--json"]
+        if self.workspace_root is not None:
+            cmd.extend(["--workspace-root", str(self.workspace_root)])
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
+            json.dump(request, handle)
+            request_path = handle.name
+        cmd.extend(["--request", request_path])
+        try:
+            proc = subprocess.run(cmd, text=True, capture_output=True, check=False)
+        finally:
+            Path(request_path).unlink(missing_ok=True)
         if not proc.stdout.strip():
             raise RuntimeError(proc.stderr or "Icon Studio returned no JSON")
         return json.loads(proc.stdout.strip())
@@ -54,6 +65,7 @@ class IconStudioClient:
         *,
         asset_id: str | None = None,
         force: bool = False,
+        hints: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         req: dict[str, Any] = {
             "schema_version": 1,
@@ -65,6 +77,8 @@ class IconStudioClient:
             req["asset_id"] = asset_id
         if force:
             req["force"] = True
+        if hints:
+            req["hints"] = hints
         return self._execute(req)
 
     def render_asset_set(
@@ -74,6 +88,7 @@ class IconStudioClient:
         *,
         asset_id: str | None = None,
         force: bool = False,
+        hints: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         req: dict[str, Any] = {
             "schema_version": 1,
@@ -85,6 +100,8 @@ class IconStudioClient:
             req["asset_id"] = asset_id
         if force:
             req["force"] = True
+        if hints:
+            req["hints"] = hints
         return self._execute(req)
 
     def validate_output(self, asset: str, output: str, purpose: str) -> dict[str, Any]:

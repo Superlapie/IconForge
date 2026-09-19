@@ -37,6 +37,13 @@ const CODES: Dictionary = {
 	"EMPTY_OUTPUT_LIST": {"recommended_action": "retry_same_request", "status": "failed"},
 	"EXPERT_FIELD_IN_SAFE_MODE": {"recommended_action": "retry_same_request", "status": "failed"},
 	"JOB_NOT_FOUND": {"recommended_action": "retry_same_request", "status": "failed"},
+	"ASSET_ID_COLLISION": {"recommended_action": "provide_unique_asset_id", "status": "failed"},
+	"MANIFEST_MISMATCH": {"recommended_action": "retry_same_request", "status": "failed"},
+	"SOURCE_IMAGE_LOAD_FAILED": {"recommended_action": "repair_source_asset", "status": "failed"},
+	"RENDER_EMPTY": {"recommended_action": "manual_composition_review", "status": "needs_review"},
+	"OUTPUT_RESOLUTION_MISMATCH": {"recommended_action": "manual_composition_review", "status": "needs_review"},
+	"OUTPUT_WRITE_FAILED": {"recommended_action": "check_workspace_permissions", "status": "failed"},
+	"OUTPUT_EXISTS": {"recommended_action": "retry_same_request", "status": "failed"},
 }
 
 static func recommended_action(code: String) -> String:

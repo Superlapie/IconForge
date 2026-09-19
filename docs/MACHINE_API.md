@@ -1,31 +1,32 @@
 # Machine API
 
-> **Primary interface for AI agents.** Icon Studio is built so autonomous agents integrate through this API — not by scraping terminal output or guessing renderer parameters.
+> **Primary interface for AI agents.** Autonomous agents integrate through this API — not by scraping terminal output or guessing renderer parameters.
 
-Icon Studio exposes a **semantic safe-mode API**. Agents specify **what** they want; Icon Studio owns rendering decisions.
-
-## Who this is for
-
-- Enigma content pipeline workers
-- Cursor / Copilot / custom coding agents
-- CI/CD and batch automation
-- Any tool that needs deterministic, validated game imagery without renderer expertise
-
-Humans and debuggers may use the GUI or expert CLI. **Normal agent integration starts here.**
-
-## Normal workflow
-
-Discover capabilities:
+## Transport
 
 ```bash
-./scripts/iconstudio api --request <(printf '%s' '{"schema_version":1,"operation":"capabilities"}') --json
+./scripts/iconstudio api --request request.json --json
 ```
 
-Render a single asset:
+Optional workspace (recommended for Enigma):
 
 ```bash
-./scripts/iconstudio api --request examples/render_inventory.json --json
+export ICONSTUDIO_WORKSPACE_ROOT=/path/to/enigma
+./scripts/iconstudio api --workspace-root "$ICONSTUDIO_WORKSPACE_ROOT" --request request.json --json
 ```
+
+Official Python wrapper: [examples/enigma_client.py](../examples/enigma_client.py) (uses temporary request files, not stdin).
+
+## Agent decision algorithm
+
+| `status` | Your action |
+|----------|-------------|
+| `validated` | Consume `output.path` and `manifest` |
+| `partial_success` | Consume only children with `status: validated`; surface the rest |
+| `needs_review` | **Stop.** Do not guess overrides or switch to expert mode |
+| `failed` | Follow `recommended_action`; fix request/source only |
+
+## Minimal render
 
 ```json
 {
@@ -36,7 +37,9 @@ Render a single asset:
 }
 ```
 
-Render multiple outputs from one source (inspected once, rendered independently):
+## render_asset_set
+
+Source is inspected **once**, then each purpose is rendered using shared inspection data. Returns an aggregate `job_id`, `manifest`, and per-purpose entries in `outputs`.
 
 ```json
 {
@@ -47,133 +50,110 @@ Render multiple outputs from one source (inspected once, rendered independently)
 }
 ```
 
-## Philosophy
+Aggregate status rules:
 
-**Good** (normal agent request):
+- all `validated` → `validated`
+- at least one `validated` plus any non-validated → `partial_success`
+- zero `validated`, all `needs_review` → `needs_review`
+- zero `validated` with any hard failure → `failed`
 
-```json
-{
-  "schema_version": 1,
-  "operation": "render_asset",
-  "asset": "assets/items/runic_sword.glb",
-  "purpose": "inventory_icon"
-}
-```
+## Safe hints (optional)
 
-**Bad** (expert/debug only — rejected in safe mode):
+| Hint | Values | Purpose |
+|------|--------|---------|
+| `asset_class` | `automatic`, `weapon`, `armor`, `consumable`, `resource`, `generic` | Semantic inventory type when game metadata knows it |
+| `orientation_hint` | `automatic`, `upright`, `horizontal`, `diagonal` | Framing orientation |
+| `framing_bias` | `automatic`, `tighter`, `looser` | Occupancy bias |
 
-```json
-{
-  "yaw": 31,
-  "pitch": -12,
-  "fov": 38,
-  "occupancy": 0.84
-}
-```
-
-The good path is dramatically easier than the bad path. Unknown fields are rejected, not silently ignored.
-
-## Safety guarantees
-
-An imperfect agent should only produce:
-
-1. **validated correct output**
-2. **deterministically auto-corrected + validated output**
-3. **`needs_review` / `failed`** with `recommended_action`
-
-There is no normal path to `success: true` with invalid output.
-
-## Operations (safe mode)
-
-| Operation | Description |
-|-----------|-------------|
-| `capabilities` | Supported operations, purposes, file types, tool version |
-| `schema` | Executable field definitions, enums, error codes |
-| `inspect_asset` | Deterministic source inspection |
-| `render_asset` | Inspect → resolve recipe → render → validate → commit |
-| `render_asset_set` | Multiple purposes from one source |
-| `validate_output` | Validate existing PNG against purpose contract |
-| `explain_result` | Deterministic trace from job ID or manifest |
+Morphology (elongated, flat, tall, etc.) affects orientation only — not semantic type. Human sidecar corrections **override** hints.
 
 ## Purposes
 
-| Purpose | Typical use |
-|---------|-------------|
-| `inventory_icon` | Inventory grid icon |
-| `shop_thumbnail` | Shop listing |
-| `equipment_preview` | Equipment slot preview |
-| `npc_portrait` | NPC portrait frame |
-| `creature_portrait` | Creature portrait |
-| `boss_portrait` | Boss portrait |
-| `neutral_thumbnail` | Generic thumbnail |
+| Purpose | Output contract |
+|---------|-----------------|
+| `inventory_icon` | 256×256, transparent |
+| `shop_thumbnail` | 128×128, transparent |
+| `equipment_preview` | 512×512, transparent (always `equipment_preview` preset) |
+| `npc_portrait` | 256×256, gradient background |
+| `creature_portrait` | 256×256, gradient background |
+| `boss_portrait` | 512×512, gradient background |
+| `neutral_thumbnail` | 256×256, transparent |
 
-Icon Studio resolves the internal preset (e.g. `weapon` vs `inventory_item`) from inspection morphology. Callers do not choose presets in safe mode.
+## asset_id rules
 
-## Statuses
+- Optional. When omitted, a collision-resistant default is derived from the source path (`basename__hash`).
+- When provided: non-empty, filename-safe lowercase, max 128 chars, no path separators or traversal.
+- Two different sources must not silently share the same output identity.
 
-| Status | Meaning |
-|--------|---------|
-| `validated` | Output passed production quality contract |
-| `partial_success` | Some outputs in a set succeeded; others need review or failed |
-| `needs_review` | Bounded correction exhausted; human review recommended |
-| `failed` | Hard failure (bad request, missing source, write error) |
+## Output locations
 
-## Response shape (success)
+Under `<workspace_root>/generated/` by purpose category, e.g. `generated/icons/inventory/sword__abc12345.png`. Callers cannot specify arbitrary paths in safe mode.
+
+## Cache semantics
+
+`cache_hit: true` is returned only when:
+
+1. A production manifest exists for the current deterministic `job_id`
+2. Manifest identity matches current source hash, dependencies, asset_id, purpose, recipe revision, effective configuration hash, hints, and output SHA-256
+3. Output still passes production quality validation
+
+Changing source, sidecar, hints, preset content, or tool version invalidates the cache. A PNG without a matching manifest is never a cache hit.
+
+## Manifest semantics
+
+Every terminal successful render writes `generated/manifests/<job_id>.json` including source identity, dependency hashes, recipe, effective override, hints, correction history, quality metrics, output hash, and trace. Cache hits return the same `manifest` field.
+
+Use `explain_result` with `job_id` for deterministic traceability.
+
+## Response examples
+
+**validated:**
 
 ```json
 {
-  "schema_version": 1,
   "success": true,
   "status": "validated",
-  "operation": "render_asset",
   "job_id": "...",
-  "asset_id": "sword",
-  "purpose": "inventory_icon",
-  "output": {
-    "path": "generated/icons/inventory/sword.png",
-    "sha256": "...",
-    "width": 256,
-    "height": 256
-  },
+  "output": {"path": "generated/icons/inventory/sword__abc.png", "sha256": "...", "width": 256, "height": 256},
   "recipe": {"id": "weapon", "revision": 1},
-  "quality": {"status": "pass", "occupancy": 0.819, "clipped": false},
   "manifest": "generated/manifests/....json",
   "cache_hit": false
 }
 ```
 
-## Error recovery
+**needs_review:**
 
-Every failure includes `code` and `recommended_action` (e.g. `provide_supported_source`, `manual_composition_review`). Agents should not infer recovery from prose.
-
-## Expert mode
-
-Low-level control (`preset`, `yaw`, arbitrary `output` paths) is available via `render_expert` with `--expert`:
-
-```bash
-./scripts/iconstudio api --request expert_render.json --expert --json
+```json
+{
+  "success": false,
+  "status": "needs_review",
+  "code": "FRAMING_UNRESOLVED",
+  "recommended_action": "manual_composition_review",
+  "manifest": "generated/manifests/....json"
+}
 ```
 
-Expert mode is for GUI parity, debugging, and authorized tooling — **not normal agent calls**.
+**failed:**
 
-## Enigma client
+```json
+{
+  "success": false,
+  "status": "failed",
+  "code": "SOURCE_NOT_FOUND",
+  "recommended_action": "provide_supported_source"
+}
+```
 
-See [examples/enigma_client.py](../examples/enigma_client.py) for a minimal Python wrapper. Transport can later change to a persistent worker without changing the request contract.
+## Expert mode (maintainers only)
 
-## Filesystem safety
+```bash
+./scripts/iconstudio api --request expert.json --expert --json
+```
 
-Safe mode writes only under `generated/` using purpose-defined categories. Callers cannot specify arbitrary output paths.
-
-## Sidecars
-
-Human corrections in `<source>.icon.json` are loaded automatically. Future safe-mode renders inherit durable corrections without agent knowledge.
-
-## Idempotency
-
-Repeated identical requests reuse validated cached output (`cache_hit: true`) and the same deterministic destination path.
+Not for normal agent integration.
 
 ## Related docs
 
-- [AGENTS.md](../AGENTS.md) — canonical agent integration guide
-- [AI_WORKFLOW.md](AI_WORKFLOW.md) — step-by-step workflow
-- [ARCHITECTURE.md](ARCHITECTURE.md) — how the API sits above render services
+- [AGENTS.md](../AGENTS.md) — persona split and decision algorithm
+- [AI_WORKFLOW.md](AI_WORKFLOW.md) — pointer to this document
+- [OUTPUT_MANIFEST.md](OUTPUT_MANIFEST.md) — manifest field reference

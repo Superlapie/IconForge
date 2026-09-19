@@ -14,7 +14,6 @@ var quality: QualityService = QualityService.new()
 var compare: CompareService = CompareService.new()
 var override_service: OverrideService = OverrideService.new()
 const ApiServiceScript = preload("res://core/api/api_service.gd")
-var api_service: RefCounted = ApiServiceScript.new()
 
 func run(raw_args: Array[String]) -> int:
 	var args: Array[String] = _clean_args(raw_args)
@@ -183,6 +182,11 @@ func _api(args: Array[String]) -> int:
 		if request.is_empty():
 			return _finish(_error("INVALID_REQUEST", "Could not read request JSON.", {"path": request_path}), _json_mode(args), EXIT_USAGE)
 	var safe_mode: bool = not _has_flag(args, "--expert")
+	var workspace_root: String = OS.get_environment("ICONSTUDIO_WORKSPACE_ROOT")
+	var workspace_option: String = _option(args, "--workspace-root", "")
+	if not workspace_option.is_empty():
+		workspace_root = workspace_option
+	var api_service: RefCounted = ApiServiceScript.new(workspace_root)
 	var result: Dictionary = await api_service.execute(request, safe_mode)
 	var exit_code: int = EXIT_OK
 	if not bool(result.get("success", false)):
@@ -325,7 +329,7 @@ func _help_result() -> Dictionary:
 			"schema": "Print the self-describing preset schema.",
 			"compare": "Compare two images with deterministic pixel metrics.",
 			"validate-output": "Run resolution, alpha, clipping, and occupancy checks.",
-			"api": "Execute a canonical machine API request (--request FILE or --stdin)."
+			"api": "Execute a canonical machine API request (--request FILE). Optional --workspace-root or ICONSTUDIO_WORKSPACE_ROOT."
 		},
 		"global_options": ["--json", "--force", "--preset ID", "--output PATH", "--request FILE", "--stdin", "--expert"]
 	}

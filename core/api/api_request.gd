@@ -5,6 +5,7 @@ const _Schema = preload("res://core/api/api_schema.gd")
 const _Operations = preload("res://core/api/operation_registry.gd")
 const _Purposes = preload("res://core/api/purpose_registry.gd")
 const _ErrorCodes = preload("res://core/api/error_codes.gd")
+const _AssetIdentity = preload("res://core/api/asset_identity.gd")
 
 ## Strict request envelope validation. Rejects unknown fields and invalid types.
 
@@ -15,9 +16,9 @@ func validate(request: Dictionary, safe_mode: bool = true) -> Dictionary:
 		return _error("INVALID_REQUEST", "Request must be a non-empty JSON object.")
 	if not request.has("schema_version"):
 		return _error("INVALID_REQUEST", "schema_version is required.")
-	if typeof(request["schema_version"]) != TYPE_INT and typeof(request["schema_version"]) != TYPE_FLOAT:
+	var schema_version: int = _coerce_strict_integer(request["schema_version"], "schema_version")
+	if schema_version < 0:
 		return _error("INVALID_FIELD_TYPE", "schema_version must be an integer.", "schema_version")
-	var schema_version: int = int(request["schema_version"])
 	if schema_version != _Schema.CURRENT_SCHEMA_VERSION:
 		return _error("UNSUPPORTED_SCHEMA_VERSION", "Unsupported schema_version %d." % schema_version)
 	if not request.has("operation"):
@@ -75,14 +76,30 @@ func validate(request: Dictionary, safe_mode: bool = true) -> Dictionary:
 	if operation == "explain_result" and not request.has("job_id") and not request.has("manifest"):
 		return _error("INVALID_REQUEST", "explain_result requires job_id or manifest.")
 
+	if request.has("asset_id"):
+		var asset_id_result: Dictionary = _AssetIdentity.validate_asset_id(str(request["asset_id"]))
+		if not bool(asset_id_result.get("success", false)):
+			return asset_id_result
+
 	return {"success": true, "operation": operation, "request": request}
 
 func _validate_field(name: String, value: Variant, spec: Dictionary) -> Dictionary:
 	var expected_type: String = str(spec.get("type", ""))
 	match expected_type:
 		"integer":
-			if typeof(value) != TYPE_INT and typeof(value) != TYPE_FLOAT:
+			var int_value: int = _coerce_strict_integer(value, name)
+			if int_value < 0:
 				return _error("INVALID_FIELD_TYPE", "%s must be an integer." % name, name)
+			if spec.has("enum") and not spec["enum"].has(int_value):
+				return _error("INVALID_ENUM_VALUE", "%s has invalid value '%s'." % [name, str(value)], name)
+		"number":
+			if typeof(value) != TYPE_INT and typeof(value) != TYPE_FLOAT:
+				return _error("INVALID_FIELD_TYPE", "%s must be a number." % name, name)
+			var numeric_value: float = float(value)
+			if spec.has("min") and numeric_value < float(spec["min"]):
+				return _error("INVALID_REQUEST", "%s is below minimum %s." % [name, str(spec["min"])], name)
+			if spec.has("max") and numeric_value > float(spec["max"]):
+				return _error("INVALID_REQUEST", "%s exceeds maximum %s." % [name, str(spec["max"])], name)
 		"string":
 			if typeof(value) != TYPE_STRING:
 				return _error("INVALID_FIELD_TYPE", "%s must be a string." % name, name)
@@ -116,6 +133,16 @@ func _validate_field(name: String, value: Variant, spec: Dictionary) -> Dictiona
 				if not nested_error.is_empty():
 					return nested_error
 	return {}
+
+func _coerce_strict_integer(value: Variant, _field: String) -> int:
+	if typeof(value) == TYPE_INT:
+		return int(value)
+	if typeof(value) == TYPE_FLOAT:
+		var as_float: float = float(value)
+		if not is_equal_approx(as_float, floor(as_float)):
+			return -1
+		return int(as_float)
+	return -1
 
 func _error(code: String, message: String, field: String = "") -> Dictionary:
 	var error: Dictionary = {

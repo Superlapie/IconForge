@@ -15,10 +15,16 @@ else
 	echo "FAIL  automated Godot tests"
 fi
 
+mkdir -p "$ROOT/out"
+
 API_CAPABILITIES="$ROOT/out/quality_api_capabilities.json"
 API_RENDER="$ROOT/out/quality_api_render.json"
+API_PORTRAIT="$ROOT/out/quality_api_portrait.json"
+API_CACHE="$ROOT/out/quality_api_cache.json"
 printf '%s\n' '{"schema_version":1,"operation":"capabilities"}' >"$API_CAPABILITIES"
 printf '%s\n' '{"schema_version":1,"operation":"render_asset","asset":"fixtures/sword.gltf","purpose":"inventory_icon","force":true}' >"$API_RENDER"
+printf '%s\n' '{"schema_version":1,"operation":"render_asset","asset":"fixtures/sword.gltf","purpose":"npc_portrait","force":true}' >"$API_PORTRAIT"
+printf '%s\n' '{"schema_version":1,"operation":"render_asset","asset":"fixtures/sword.gltf","purpose":"shop_thumbnail"}' >"$API_CACHE"
 
 if "$CLI" api --request "$API_CAPABILITIES" --json >/dev/null; then
 	:
@@ -32,6 +38,32 @@ if "$CLI" api --request "$API_RENDER" --json >/dev/null; then
 else
 	failed=1
 	echo "FAIL  machine API render_asset"
+fi
+
+if "$CLI" api --request "$API_PORTRAIT" --json >/dev/null; then
+	:
+else
+	failed=1
+	echo "FAIL  machine API portrait purpose"
+fi
+
+if "$CLI" api --request "$API_CACHE" --json >/dev/null; then
+	if "$CLI" api --request "$API_CACHE" --json | grep -q '"cache_hit":true'; then
+		:
+	else
+		failed=1
+		echo "FAIL  machine API cache hit"
+	fi
+else
+	failed=1
+	echo "FAIL  machine API cache render"
+fi
+
+if "$ROOT/scripts/client-e2e"; then
+	:
+else
+	failed=1
+	echo "FAIL  official Enigma client E2E"
 fi
 
 for preset in "$ROOT"/presets/*.json; do

@@ -4,14 +4,20 @@ Manifests are the **production audit record** for agents and humans. Do not reve
 
 ## Machine API manifests
 
-Every successful `render_asset` or `render_asset_set` entry writes a manifest to `generated/manifests/<job_id>.json` containing:
+Every successful `render_asset` writes a manifest to `<workspace>/generated/manifests/<job_id>.json` containing:
 
-- `job_id`, `operation`, `purpose`, `source`, `source_hash`
+- `job_id`, `operation`, `purpose`, `status`
+- `source`, `source_hash`, `source_identity`, `dependency_hashes`
+- `asset_id`, `hints`, `effective_override`, `effective_config_hash`
 - `recipe` (`id` + `revision`)
 - `inspection_summary`, `resolution_reasons`
-- `correction` history, `quality` metrics
-- `output` path and SHA-256
-- `trace` (render state machine path)
+- `correction` history, `quality` metrics (including silhouette metrics for opaque portraits)
+- `output` path, dimensions, and SHA-256
+- `tool_version`, `cache_hit`, `trace`
+
+`render_asset_set` also writes an aggregate manifest with `child_job_ids`, `children`, and `summary`.
+
+Cache-hit responses include the same `manifest` path — agents must not consume artifacts without manifest traceability.
 
 Use `explain_result` with a `job_id` to retrieve deterministic traceability.
 

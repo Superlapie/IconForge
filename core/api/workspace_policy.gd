@@ -2,6 +2,7 @@ extends RefCounted
 class_name WorkspacePolicy
 
 const _ErrorCodes = preload("res://core/api/error_codes.gd")
+const _AssetIdentity = preload("res://core/api/asset_identity.gd")
 
 ## Filesystem safety for safe-mode machine requests.
 
@@ -15,7 +16,7 @@ func _init(root: String = "") -> void:
 		workspace_root = _normalize_absolute(root)
 	generated_root = workspace_root.path_join("generated")
 
-func resolve_asset_path(asset: String) -> Dictionary:
+func resolve_asset_path(asset: String, explicit_asset_id: String = "") -> Dictionary:
 	if asset.is_empty():
 		return _error("INVALID_REQUEST", "Asset path is required.")
 	if _contains_traversal(asset):
@@ -28,7 +29,15 @@ func resolve_asset_path(asset: String) -> Dictionary:
 			absolute = ProjectSettings.globalize_path("res://" + asset.trim_prefix("./"))
 	if not FileAccess.file_exists(absolute):
 		return _error("SOURCE_NOT_FOUND", "Source asset does not exist.", asset)
-	return {"success": true, "path": absolute, "asset_id": IconStudioFileUtil.source_name(absolute)}
+	var identity: Dictionary = _AssetIdentity.resolve(asset, absolute, workspace_root, explicit_asset_id)
+	if not bool(identity.get("success", false)):
+		return identity
+	return {
+		"success": true,
+		"path": absolute,
+		"asset_id": str(identity["asset_id"]),
+		"source_identity": str(identity["source_identity"]),
+	}
 
 func resolve_output_path(purpose_id: String, asset_id: String, purpose_registry: RefCounted) -> Dictionary:
 	var purpose_def: Dictionary = purpose_registry.get_purpose(purpose_id)

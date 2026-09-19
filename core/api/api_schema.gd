@@ -4,11 +4,17 @@ class_name ApiSchema
 const _Operations = preload("res://core/api/operation_registry.gd")
 const _Purposes = preload("res://core/api/purpose_registry.gd")
 const _ErrorCodes = preload("res://core/api/error_codes.gd")
+const _Version = preload("res://core/api/icon_studio_version.gd")
 
 ## Executable source of truth for machine API request validation and discovery.
 
 const CURRENT_SCHEMA_VERSION: int = 1
-const TOOL_VERSION: String = "0.1.0"
+
+const SAFE_HINT_FIELDS: Dictionary = {
+	"orientation_hint": {"type": "string", "enum": ["automatic", "upright", "horizontal", "diagonal"]},
+	"framing_bias": {"type": "string", "enum": ["automatic", "tighter", "looser"]},
+	"asset_class": {"type": "string", "enum": ["automatic", "weapon", "armor", "consumable", "resource", "generic"]},
+}
 
 const EXPERT_FIELDS: Array[String] = [
 	"preset", "yaw", "pitch", "roll", "occupancy", "padding", "scale",
@@ -35,10 +41,7 @@ const OPERATION_SCHEMAS: Dictionary = {
 			"asset": {"type": "string", "min_length": 1},
 			"purpose": {"type": "string"},
 			"asset_id": {"type": "string"},
-			"hints": {"type": "object", "fields": {
-				"orientation_hint": {"type": "string", "enum": ["automatic", "upright", "horizontal", "diagonal"]},
-				"framing_bias": {"type": "string", "enum": ["automatic", "tighter", "looser"]},
-			}},
+			"hints": {"type": "object", "fields": SAFE_HINT_FIELDS},
 			"force": {"type": "boolean"},
 		},
 	},
@@ -51,7 +54,7 @@ const OPERATION_SCHEMAS: Dictionary = {
 			"asset": {"type": "string", "min_length": 1},
 			"outputs": {"type": "array", "min_length": 1, "item_type": "string"},
 			"asset_id": {"type": "string"},
-			"hints": {"type": "object"},
+			"hints": {"type": "object", "fields": SAFE_HINT_FIELDS},
 			"force": {"type": "boolean"},
 		},
 	},
@@ -94,13 +97,20 @@ const OPERATION_SCHEMAS: Dictionary = {
 	},
 	"render_expert": {
 		"required": ["schema_version", "operation", "asset", "preset", "output"],
-		"optional": ["yaw", "pitch", "roll", "occupancy", "padding", "scale", "force"],
+		"optional": ["yaw", "pitch", "roll", "occupancy", "padding", "scale", "fov", "force"],
 		"fields": {
 			"schema_version": {"type": "integer", "enum": [1]},
 			"operation": {"type": "string", "enum": ["render_expert"]},
 			"asset": {"type": "string", "min_length": 1},
 			"preset": {"type": "string"},
 			"output": {"type": "string", "min_length": 1},
+			"yaw": {"type": "number", "min": -360.0, "max": 360.0},
+			"pitch": {"type": "number", "min": -90.0, "max": 90.0},
+			"roll": {"type": "number", "min": -180.0, "max": 180.0},
+			"occupancy": {"type": "number", "min": 0.05, "max": 0.99},
+			"padding": {"type": "number", "min": 0.0, "max": 0.5},
+			"scale": {"type": "number", "min": 0.1, "max": 4.0},
+			"fov": {"type": "number", "min": 10.0, "max": 120.0},
 			"force": {"type": "boolean"},
 		},
 	},
@@ -113,7 +123,7 @@ static func describe() -> Dictionary:
 	var purpose_registry: RefCounted = _Purposes.new()
 	return {
 		"schema_version": CURRENT_SCHEMA_VERSION,
-		"tool_version": TOOL_VERSION,
+		"tool_version": _Version.VERSION,
 		"description": "Icon Studio canonical machine API schema.",
 		"operations": operations,
 		"purposes": purpose_registry.list_purposes(),
@@ -130,7 +140,7 @@ static func capabilities() -> Dictionary:
 		roles.append(str(entry.get("output_role", "")))
 	return {
 		"schema_version": CURRENT_SCHEMA_VERSION,
-		"tool_version": TOOL_VERSION,
+		"tool_version": _Version.VERSION,
 		"operations": _Operations.list_operations(),
 		"purposes": purpose_registry.purpose_ids(),
 		"supported_extensions": ["glb", "gltf", "png", "jpg", "jpeg", "webp"],

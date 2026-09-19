@@ -15,7 +15,7 @@ var lighting: LightingRigService = LightingRigService.new()
 var loader: RefCounted = AssetLoaderScript.new()
 var stage_builder: RenderStageScript = RenderStageScript.new()
 
-func render(source_path: String, preset: PresetDefinition, override: Dictionary = {}, output_path: String = "", force: bool = false) -> Dictionary:
+func render(source_path: String, preset: PresetDefinition, override: Dictionary = {}, output_path: String = "", force: bool = false, options: Dictionary = {}) -> Dictionary:
 	var inspection: Dictionary = inspector.inspect(source_path)
 	if not bool(inspection.get("success", false)):
 		return {
@@ -24,10 +24,12 @@ func render(source_path: String, preset: PresetDefinition, override: Dictionary 
 			"preset": preset.get_id(),
 			"error": inspection.get("error", {"code": "SOURCE_INSPECTION_FAILED", "message": "Asset inspection failed."})
 		}
-	var sidecar: Dictionary = overrides.load_for_source(source_path)
-	if not bool(sidecar.get("success", false)):
-		return {"success": false, "source": source_path, "preset": preset.get_id(), "error": sidecar.get("error")}
-	var merged_override: Dictionary = PresetDefinition.deep_merge(sidecar.get("override", {}), override)
+	var merged_override: Dictionary = override.duplicate(true)
+	if not bool(options.get("skip_sidecar_load", false)):
+		var sidecar: Dictionary = overrides.load_for_source(source_path)
+		if not bool(sidecar.get("success", false)):
+			return {"success": false, "source": source_path, "preset": preset.get_id(), "error": sidecar.get("error")}
+		merged_override = PresetDefinition.deep_merge(sidecar.get("override", {}), override)
 	var effective_preset: PresetDefinition = _effective_preset(preset, merged_override)
 	var expected_size: Vector2i = _resolution(effective_preset)
 	var analyze_alpha: bool = str(effective_preset.data.get("environment", {}).get("background", "transparent")) == "transparent"
@@ -45,7 +47,8 @@ func render(source_path: String, preset: PresetDefinition, override: Dictionary 
 	if inspection.get("kind", "3d") == "image":
 		raw_result = _render_static_image(source_path, effective_preset)
 	else:
-		raw_result = await _render_3d(source_path, inspection, effective_preset, merged_override)
+		var max_passes: int = int(options.get("max_correction_passes", MAX_CORRECTION_PASSES))
+		raw_result = await _render_3d(source_path, inspection, effective_preset, merged_override, max_passes)
 	if not bool(raw_result.get("success", false)):
 		return raw_result
 
@@ -152,7 +155,7 @@ func _fit_static_image(source: Image, target_size: Vector2i, preset: PresetDefin
 	canvas.blend_rect(resized, Rect2i(Vector2i.ZERO, resized.get_size()), offset)
 	return canvas
 
-func _render_3d(source_path: String, inspection: Dictionary, preset: PresetDefinition, override: Dictionary) -> Dictionary:
+func _render_3d(source_path: String, inspection: Dictionary, preset: PresetDefinition, override: Dictionary, max_passes: int = MAX_CORRECTION_PASSES) -> Dictionary:
 	var tree: SceneTree = Engine.get_main_loop() as SceneTree
 	if tree == null:
 		return {"success": false, "source": source_path, "error": {"code": "RENDER_NO_SCENE_TREE", "message": "Godot scene tree is unavailable for 3D rendering."}}
@@ -170,7 +173,7 @@ func _render_3d(source_path: String, inspection: Dictionary, preset: PresetDefin
 	var last_metrics: Dictionary = {}
 	var passes: int = 0
 	var warnings: Array = []
-	for pass_index in MAX_CORRECTION_PASSES:
+	for pass_index in maxi(1, max_passes):
 		passes = pass_index + 1
 		var frame_result: Dictionary = await _render_3d_frame(tree, packed_scene, inspection, preset, params, current_size)
 		if not bool(frame_result.get("success", false)):
@@ -219,9 +222,7 @@ func _save_png_atomic(image: Image, path: String) -> Error:
 	var save_error: Error = image.save_png(temp_path)
 	if save_error != OK:
 		return save_error
-	if FileAccess.file_exists(path):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
-	return DirAccess.rename_absolute(ProjectSettings.globalize_path(temp_path), ProjectSettings.globalize_path(path))
+	return IconStudioFileUtil.safe_replace_file(temp_path, path)
 
 func _resolution(preset: PresetDefinition) -> Vector2i:
 	var resolution: Dictionary = preset.data.get("resolution", {})

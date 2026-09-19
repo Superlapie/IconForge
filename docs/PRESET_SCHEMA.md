@@ -14,7 +14,13 @@ The machine API schema (operations, purposes, request fields) is separate and re
 ./scripts/iconstudio api --request <(printf '%s' '{"schema_version":1,"operation":"schema"}') --json
 ```
 
-Minimal valid preset:
+## preset_revision
+
+Every preset file includes `preset_revision` (integer ≥ 1). Bump it when any field that affects rendered output changes (resolution, camera, lighting, environment, shadows, post-process, composition). Job identity and cache keys include `preset_revision` — bumping invalidates stale cached output for that recipe.
+
+Do **not** bump for documentation-only edits (`display_name`, `description`, `tags`).
+
+## Minimal valid preset
 
 ```json
 {

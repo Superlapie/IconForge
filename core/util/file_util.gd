@@ -22,6 +22,31 @@ static func read_json(path: String) -> Dictionary:
 	var parsed: Variant = JSON.parse_string(file.get_as_text())
 	return parsed if parsed is Dictionary else {}
 
+static func safe_replace_file(temp_path: String, destination_path: String) -> Error:
+	if not FileAccess.file_exists(temp_path):
+		return ERR_FILE_NOT_FOUND
+	var absolute_temp: String = ProjectSettings.globalize_path(temp_path) if temp_path.begins_with("res://") or temp_path.begins_with("user://") else temp_path
+	var absolute_destination: String = ProjectSettings.globalize_path(destination_path) if destination_path.begins_with("res://") or destination_path.begins_with("user://") else destination_path
+	var dir_error: Error = ensure_directory(absolute_destination)
+	if dir_error != OK:
+		return dir_error
+	var backup_path: String = "%s.bak.%s" % [absolute_destination, str(Time.get_ticks_usec())]
+	var had_destination: bool = FileAccess.file_exists(absolute_destination)
+	if had_destination:
+		var copy_error: Error = DirAccess.copy_absolute(absolute_destination, backup_path)
+		if copy_error != OK:
+			return copy_error
+	var rename_error: Error = DirAccess.rename_absolute(absolute_temp, absolute_destination)
+	if rename_error != OK:
+		if had_destination and FileAccess.file_exists(backup_path):
+			if FileAccess.file_exists(absolute_destination):
+				DirAccess.remove_absolute(absolute_destination)
+			DirAccess.rename_absolute(backup_path, absolute_destination)
+		return rename_error
+	if had_destination and FileAccess.file_exists(backup_path):
+		DirAccess.remove_absolute(backup_path)
+	return OK
+
 static func write_json_atomic(path: String, value: Variant) -> Error:
 	var dir_error: Error = ensure_directory(path)
 	if dir_error != OK:
@@ -33,10 +58,7 @@ static func write_json_atomic(path: String, value: Variant) -> Error:
 	file.store_string(JSON.stringify(value, "\t"))
 	file.flush()
 	file.close()
-	if FileAccess.file_exists(path):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
-	var rename_error: Error = DirAccess.rename_absolute(ProjectSettings.globalize_path(temp_path), ProjectSettings.globalize_path(path))
-	return rename_error
+	return safe_replace_file(temp_path, path)
 
 static func write_text_atomic(path: String, content: String) -> Error:
 	var dir_error: Error = ensure_directory(path)
@@ -49,9 +71,7 @@ static func write_text_atomic(path: String, content: String) -> Error:
 	file.store_string(content)
 	file.flush()
 	file.close()
-	if FileAccess.file_exists(path):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
-	return DirAccess.rename_absolute(ProjectSettings.globalize_path(temp_path), ProjectSettings.globalize_path(path))
+	return safe_replace_file(temp_path, path)
 
 static func file_hash(path: String) -> String:
 	if not FileAccess.file_exists(path):
