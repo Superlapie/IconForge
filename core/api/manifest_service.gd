@@ -76,19 +76,20 @@ func commit_validated_render(output_temp_path: String, output_path: String, job_
 	if not bool(manifest_result.get("success", false)):
 		var rollback_result: Dictionary = _restore_output(output_path, had_output, output_backup_path)
 		if not bool(rollback_result.get("success", true)):
-			return rollback_result
+			return _attach_recovery_backup(rollback_result, output_backup_path)
+		_cleanup_backup(output_backup_path)
 		return manifest_result
 
 	var stored: Dictionary = manifest_result.get("manifest", {})
 	var stored_output: Dictionary = stored.get("output", {})
 	if str(stored_output.get("sha256", "")) != output_sha256:
 		var rollback_result: Dictionary = _restore_output(output_path, had_output, output_backup_path)
-		_cleanup_backup(output_backup_path)
 		var mismatched_manifest_path: String = manifest_path_for_job(job_id)
 		if FileAccess.file_exists(mismatched_manifest_path):
 			DirAccess.remove_absolute(mismatched_manifest_path)
 		if not bool(rollback_result.get("success", true)):
-			return rollback_result
+			return _attach_recovery_backup(rollback_result, output_backup_path)
+		_cleanup_backup(output_backup_path)
 		return {"success": false, "error": {"code": "MANIFEST_MISMATCH", "message": "Committed manifest does not match output hash."}}
 
 	var ownership: Dictionary = {
@@ -107,9 +108,9 @@ func commit_validated_render(output_temp_path: String, output_path: String, job_
 		var rollback_result: Dictionary = _restore_output(output_path, had_output, output_backup_path)
 		if FileAccess.file_exists(manifest_path_for_job(job_id)):
 			DirAccess.remove_absolute(manifest_path_for_job(job_id))
-		_cleanup_backup(output_backup_path)
 		if not bool(rollback_result.get("success", true)):
-			return rollback_result
+			return _attach_recovery_backup(rollback_result, output_backup_path)
+		_cleanup_backup(output_backup_path)
 		return {"success": false, "error": {"code": "WRITE_FAILED", "message": "Could not write output ownership record."}}
 
 	_update_output_index(output_path, ownership)
@@ -190,20 +191,20 @@ func _update_output_index(output_path: String, ownership: Dictionary) -> void:
 
 func _restore_output(output_path: String, had_output: bool, output_backup_path: String) -> Dictionary:
 	if test_fail_restore_output:
-		return {
+		return _attach_recovery_backup({
 			"success": false,
 			"error": {
 				"code": "ROLLBACK_FAILED",
 				"message": "Could not restore previous output after commit failure.",
 				"path": output_path,
 			},
-		}
+		}, output_backup_path)
 	if had_output and not output_backup_path.is_empty() and FileAccess.file_exists(output_backup_path):
 		var restore_error: Error = DirAccess.copy_absolute(output_backup_path, output_path)
 		if restore_error != OK:
 			if FileAccess.file_exists(output_path):
 				DirAccess.remove_absolute(output_path)
-			return {
+			return _attach_recovery_backup({
 				"success": false,
 				"error": {
 					"code": "ROLLBACK_FAILED",
@@ -211,11 +212,20 @@ func _restore_output(output_path: String, had_output: bool, output_backup_path: 
 					"path": output_path,
 					"godot_error": restore_error,
 				},
-			}
+			}, output_backup_path)
 		return {"success": true}
 	if FileAccess.file_exists(output_path):
 		DirAccess.remove_absolute(output_path)
 	return {"success": true}
+
+func _attach_recovery_backup(result: Dictionary, output_backup_path: String) -> Dictionary:
+	if not output_backup_path.is_empty() and FileAccess.file_exists(output_backup_path):
+		var enriched: Dictionary = result.duplicate(true)
+		var error: Dictionary = enriched.get("error", {}).duplicate(true)
+		error["recovery_backup_path"] = output_backup_path
+		enriched["error"] = error
+		return enriched
+	return result
 
 func _cleanup_temp(temp_path: String) -> void:
 	if FileAccess.file_exists(temp_path):

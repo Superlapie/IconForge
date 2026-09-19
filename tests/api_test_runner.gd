@@ -58,6 +58,12 @@ func run() -> Dictionary:
 	await _scenario_output_lock_token_safe_release()
 	await _scenario_output_lock_missing_lease_grace()
 	await _scenario_output_lock_heartbeat_extends_lease()
+	await _scenario_output_lock_orphan_temp_recovery()
+	await _scenario_output_lock_linux_live_holder_authoritative()
+	await _scenario_output_lock_crash_states()
+	await _scenario_review_queue_per_job_records()
+	await _scenario_source_changed_during_render()
+	await _scenario_rollback_preserves_backup()
 	await _scenario_aggregate_manifest_write_failure()
 	await _scenario_workspace_exclusive_relative_path()
 	await _scenario_sidecar_value_validation()
@@ -858,10 +864,11 @@ func _scenario_review_queue_workspace() -> void:
 	DirAccess.make_dir_recursive_absolute(ws)
 	var ReviewQueueScript = load("res://core/api/review_queue.gd")
 	var queue: RefCounted = ReviewQueueScript.new(ws)
-	queue.record({"code": "FRAMING_UNRESOLVED", "purpose": "inventory_icon"})
-	var path: String = str(queue.queue_path())
-	_assert(path.begins_with(ws.path_join("generated")), "review queue uses workspace generated root")
-	_assert(FileAccess.file_exists(path), "review queue wrote workspace file")
+	var result: Dictionary = queue.record({"job_id": "review_ws_job", "code": "FRAMING_UNRESOLVED", "purpose": "inventory_icon"})
+	_assert(bool(result.get("success", false)), "review queue record succeeds")
+	var path: String = str(queue.record_path("review_ws_job"))
+	_assert(path.begins_with(ws.path_join("generated/reviews")), "review queue uses per-job generated path")
+	_assert(FileAccess.file_exists(path), "review queue wrote per-job record")
 
 func _scenario_output_lock_contention() -> void:
 	scenarios_run += 1
@@ -952,6 +959,115 @@ func _scenario_output_lock_heartbeat_extends_lease() -> void:
 	lease = IconForgeFileUtil.read_json(lease_path)
 	_assert(int(lease.get("heartbeat_at_ms", 0)) >= before, "heartbeat advances activity timestamp")
 	holder.release()
+
+func _scenario_output_lock_orphan_temp_recovery() -> void:
+	scenarios_run += 1
+	var OutputLockScript = load("res://core/api/output_lock.gd")
+	var path: String = repo_root.path_join("out/lock_orphan_tmp_%d.png" % Time.get_ticks_usec())
+	var lock_dir: String = "%s.lock" % path
+	DirAccess.make_dir_recursive_absolute(lock_dir.get_base_dir())
+	DirAccess.make_dir_absolute(lock_dir)
+	IconForgeFileUtil.write_text_atomic(lock_dir.path_join("lease.json.tmp.12345"), "{\"token\":\"orphan\"}")
+	OutputLock.test_dir_age_ms_override = OutputLock.LEASE_WRITE_GRACE_MS + 1000
+	var lock: RefCounted = OutputLockScript.new()
+	var result: Dictionary = lock.acquire(path, 500)
+	_assert(bool(result.get("success", false)), "orphan lease temp is reaped and lock acquired")
+	_assert(not DirAccess.dir_exists_absolute(lock_dir) or lock.lock_dir == lock_dir, "orphan temp does not wedge lock directory")
+	if lock.acquired:
+		lock.release()
+	OutputLock.reset_test_seams()
+
+func _scenario_output_lock_linux_live_holder_authoritative() -> void:
+	if OS.get_name() != "Linux":
+		return
+	scenarios_run += 1
+	OutputLock.reset_test_seams()
+	var OutputLockScript = load("res://core/api/output_lock.gd")
+	var path: String = repo_root.path_join("out/lock_linux_live_%d.png" % Time.get_ticks_usec())
+	var holder: RefCounted = OutputLockScript.new()
+	_assert(bool(holder.acquire(path, 500).get("success", false)), "linux live holder acquires")
+	var lease_path: String = holder.lock_dir.path_join("lease.json")
+	var lease: Dictionary = IconForgeFileUtil.read_json(lease_path)
+	lease["acquired_at_ms"] = OutputLock._now_ms() - 999999999
+	lease["heartbeat_at_ms"] = lease["acquired_at_ms"]
+	lease["pid"] = OS.get_process_id()
+	lease["pid_start_ticks"] = OutputLock._current_process_start_ticks()
+	IconForgeFileUtil.write_json_atomic(lease_path, lease)
+	var contender: RefCounted = OutputLockScript.new()
+	var second: Dictionary = contender.acquire(path, 300)
+	_assert(not bool(second.get("success", true)), "linux live matching pid remains authoritative without heartbeat")
+	holder.release()
+	OutputLock.reset_test_seams()
+
+func _scenario_output_lock_crash_states() -> void:
+	scenarios_run += 1
+	var OutputLockScript = load("res://core/api/output_lock.gd")
+	var base: String = repo_root.path_join("out/lock_crash_%d.png" % Time.get_ticks_usec())
+	var lock_dir: String = "%s.lock" % base
+	DirAccess.make_dir_recursive_absolute(lock_dir.get_base_dir())
+
+	var holder: RefCounted = OutputLockScript.new()
+	_assert(bool(holder.acquire(base, 500).get("success", false)), "crash fuzz baseline acquire")
+	holder.release()
+	_assert(not holder.lock_directory_exists(), "crash fuzz released lock is gone")
+
+	DirAccess.make_dir_absolute(lock_dir)
+	var empty_lock: RefCounted = OutputLockScript.new()
+	var empty_result: Dictionary = empty_lock.acquire(base, 200)
+	_assert(not bool(empty_result.get("success", true)), "crash fuzz empty lock dir is not immediately stolen")
+	if DirAccess.dir_exists_absolute(lock_dir):
+		DirAccess.remove_absolute(lock_dir)
+
+	DirAccess.make_dir_absolute(lock_dir)
+	IconForgeFileUtil.write_text_atomic(lock_dir.path_join("lease.json.tmp.crash"), "{}")
+	OutputLock.test_dir_age_ms_override = OutputLock.LEASE_WRITE_GRACE_MS + 1000
+	var tmp_lock: RefCounted = OutputLockScript.new()
+	var tmp_result: Dictionary = tmp_lock.acquire(base, 500)
+	_assert(bool(tmp_result.get("success", false)), "crash fuzz orphan tmp-only lock is reaped")
+	if tmp_lock.acquired:
+		tmp_lock.release()
+	OutputLock.reset_test_seams()
+
+func _scenario_review_queue_per_job_records() -> void:
+	scenarios_run += 1
+	var ws: String = repo_root.path_join("out/review_parallel_%d" % Time.get_ticks_usec())
+	DirAccess.make_dir_recursive_absolute(ws)
+	var ReviewQueueScript = load("res://core/api/review_queue.gd")
+	var queue: RefCounted = ReviewQueueScript.new(ws)
+	var first: Dictionary = queue.record({"job_id": "review_a", "code": "FRAMING_UNRESOLVED", "purpose": "inventory_icon"})
+	var second: Dictionary = queue.record({"job_id": "review_b", "code": "OUTPUT_CLIPPED", "purpose": "shop_thumbnail"})
+	_assert(bool(first.get("success", false)) and bool(second.get("success", false)), "parallel review records persist")
+	_assert(FileAccess.file_exists(queue.record_path("review_a")), "first review record exists")
+	_assert(FileAccess.file_exists(queue.record_path("review_b")), "second review record exists")
+	_assert(queue.list_entries().size() >= 2, "review list includes both records")
+
+func _scenario_source_changed_during_render() -> void:
+	scenarios_run += 1
+	var mutable_dir: String = repo_root.path_join("out/source_mutate_%d" % Time.get_ticks_usec())
+	DirAccess.make_dir_recursive_absolute(mutable_dir)
+	var source_path: String = mutable_dir.path_join("mutable.gltf")
+	DirAccess.copy_absolute(repo_root.path_join("fixtures/sword.gltf"), source_path)
+	var original_hash: String = IconForgeFileUtil.file_hash(source_path)
+	var dependencies: Array = JobIdentity.dependency_hashes(source_path)
+	_assert(JobIdentity.source_snapshot_matches(source_path, original_hash, dependencies), "source snapshot matches before mutation")
+	DirAccess.copy_absolute(repo_root.path_join("fixtures/potion.gltf"), source_path)
+	_assert(not JobIdentity.source_snapshot_matches(source_path, original_hash, dependencies), "source snapshot detects mutation")
+
+func _scenario_rollback_preserves_backup() -> void:
+	scenarios_run += 1
+	api.manifest_service.reset_test_seams()
+	var output_path: String = repo_root.path_join("out/rollback_backup_%d.png" % Time.get_ticks_usec())
+	var backup_path: String = "%s.rollback.backup" % output_path
+	IconForgeFileUtil.write_text_atomic(output_path, "original-output")
+	DirAccess.copy_absolute(output_path, backup_path)
+	var original_sha: String = IconForgeFileUtil.file_hash(backup_path)
+	api.manifest_service.test_fail_restore_output = true
+	var rollback: Dictionary = api.manifest_service._restore_output(output_path, true, backup_path)
+	api.manifest_service.reset_test_seams()
+	_assert(not bool(rollback.get("success", true)), "rollback failure is surfaced")
+	_assert(str(rollback.get("error", {}).get("code", "")) == "ROLLBACK_FAILED", "rollback failure code")
+	_assert(FileAccess.file_exists(backup_path), "rollback failure preserves recovery backup")
+	_assert(IconForgeFileUtil.file_hash(backup_path) == original_sha, "recovery backup bytes preserved")
 
 func _scenario_output_lock_missing_lease_grace() -> void:
 	scenarios_run += 1

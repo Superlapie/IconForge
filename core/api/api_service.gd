@@ -220,6 +220,22 @@ func _render_asset_pipeline(request: Dictionary, safe_mode: bool, shared_context
 	state = RenderState.VALIDATED_OUTPUT
 	trace.append(_state_entry(state))
 
+	if not _JobIdentity.source_snapshot_matches(source_path, source_hash, dependency_hashes):
+		_cleanup_temp(temp_path)
+		output_lock.release()
+		return _Response.failure(
+			"render_asset",
+			"SOURCE_CHANGED_DURING_RENDER",
+			"Source or dependency bytes changed during render.",
+			{
+				"job_id": job_id,
+				"asset_id": asset_id,
+				"purpose": purpose_id,
+				"recommended_action": _ErrorCodes.recommended_action("SOURCE_CHANGED_DURING_RENDER"),
+				"attempts": trace,
+			}
+		)
+
 	var manifest_payload: Dictionary = _build_manifest_payload(
 		"render_asset", job_id, source_path, source_hash, source_identity, dependency_hashes,
 		asset_id, purpose_id, preset_id, preset_revision, effective_override, effective_config_hash,
@@ -562,7 +578,7 @@ func _build_manifest_payload(operation: String, job_id: String, source_path: Str
 
 func _handle_render_failure(operation: String, error: Dictionary, trace: Array, job_id: String, source_path: String, purpose_id: String, asset_id: String, preset_id: String, render_result: Dictionary) -> Dictionary:
 	var code: String = str(error.get("code", "RENDER_FAILED"))
-	review_queue.record({
+	var persistence: Dictionary = _persist_review_state({
 		"job_id": job_id,
 		"asset": source_path,
 		"asset_id": asset_id,
@@ -572,8 +588,7 @@ func _handle_render_failure(operation: String, error: Dictionary, trace: Array, 
 		"metrics": render_result.get("metrics", {}),
 		"recommended_action": _ErrorCodes.recommended_action(code),
 		"trace": trace,
-	})
-	var _unused: Dictionary = manifest_service.write_manifest(job_id, {
+	}, {
 		"operation": operation,
 		"source": source_path,
 		"asset_id": asset_id,
@@ -588,6 +603,8 @@ func _handle_render_failure(operation: String, error: Dictionary, trace: Array, 
 		"attempts": trace,
 		"asset_id": asset_id,
 		"purpose": purpose_id,
+		"review_persisted": bool(persistence.get("review_persisted", false)),
+		"manifest": str(persistence.get("manifest", "")),
 	})
 
 func _handle_quality_failure(operation: String, quality: Dictionary, trace: Array, job_id: String, source_path: String, source_hash: String, source_identity: String, dependency_hashes: Array, purpose_id: String, asset_id: String, preset_id: String, preset_revision: int, inspection: Dictionary, recipe: Dictionary, hints: Dictionary, effective_override: Dictionary, effective_config_hash: String, render_result: Dictionary, correction_actions: Array) -> Dictionary:
@@ -596,7 +613,7 @@ func _handle_quality_failure(operation: String, quality: Dictionary, trace: Arra
 	if code in ["OUTPUT_CLIPPED", "OCCUPANCY_LOW", "OCCUPANCY_HIGH"]:
 		code = "FRAMING_UNRESOLVED"
 
-	review_queue.record({
+	var persistence: Dictionary = _persist_review_state({
 		"job_id": job_id,
 		"asset": source_path,
 		"asset_id": asset_id,
@@ -607,9 +624,7 @@ func _handle_quality_failure(operation: String, quality: Dictionary, trace: Arra
 		"correction": {"passes": int(render_result.get("render_passes", 1)), "actions": correction_actions},
 		"recommended_action": _ErrorCodes.recommended_action(code),
 		"trace": trace,
-	})
-
-	var _unused_review_manifest: Dictionary = manifest_service.write_manifest(job_id, {
+	}, {
 		"operation": operation,
 		"source": source_path,
 		"source_hash": source_hash,
@@ -639,7 +654,8 @@ func _handle_quality_failure(operation: String, quality: Dictionary, trace: Arra
 		"job_id": job_id,
 		"asset_id": asset_id,
 		"purpose": purpose_id,
-		"manifest": manifest_service.manifest_path_for_job(job_id),
+		"manifest": str(persistence.get("manifest", "")),
+		"review_persisted": bool(persistence.get("review_persisted", false)),
 		"attempts": trace,
 		"quality": quality,
 	}
@@ -658,14 +674,37 @@ func _terminal_failure(operation: String, error: Dictionary, trace: Array, job_i
 		details["field"] = error["field"]
 	return _Response.failure(operation, code, str(mapped.get("message", error.get("message", "Operation failed."))), details)
 
+func _persist_review_state(review_entry: Dictionary, manifest_payload: Dictionary) -> Dictionary:
+	var review_result: Dictionary = review_queue.record(review_entry)
+	var job_id: String = str(review_result.get("job_id", review_entry.get("job_id", manifest_payload.get("job_id", ""))))
+	var manifest_result: Dictionary = {"success": true, "path": ""}
+	if not job_id.is_empty():
+		manifest_payload["job_id"] = job_id
+		manifest_result = manifest_service.write_manifest(job_id, manifest_payload)
+	return {
+		"review_persisted": bool(review_result.get("success", false)) and bool(manifest_result.get("success", false)),
+		"review_path": str(review_result.get("path", "")),
+		"manifest": str(manifest_result.get("path", "")) if bool(manifest_result.get("success", false)) else "",
+		"review_error": review_result.get("error", {}),
+		"manifest_error": manifest_result.get("error", {}),
+	}
+
 func _terminal_review(operation: String, error: Dictionary, trace: Array, source_path: String, purpose_id: String, asset_id: String) -> Dictionary:
 	var code: String = str(error.get("code", "RECIPE_RESOLUTION_FAILED"))
-	review_queue.record({
+	var persistence: Dictionary = _persist_review_state({
 		"asset": source_path,
 		"asset_id": asset_id,
 		"purpose": purpose_id,
 		"code": code,
 		"recommended_action": _ErrorCodes.recommended_action(code),
+		"trace": trace,
+	}, {
+		"operation": operation,
+		"source": source_path,
+		"asset_id": asset_id,
+		"purpose": purpose_id,
+		"status": "needs_review",
+		"code": code,
 		"trace": trace,
 	})
 	return {

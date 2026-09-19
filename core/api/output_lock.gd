@@ -14,10 +14,12 @@ var acquired: bool = false
 
 static var test_process_alive_override: Dictionary = {}
 static var test_process_start_ticks_override: Dictionary = {}
+static var test_dir_age_ms_override: int = -1
 
 static func reset_test_seams() -> void:
 	test_process_alive_override.clear()
 	test_process_start_ticks_override.clear()
+	test_dir_age_ms_override = -1
 
 static func _now_ms() -> int:
 	return int(Time.get_unix_time_from_system() * 1000.0)
@@ -69,6 +71,9 @@ func release() -> void:
 	_remove_lock_dir_if_token_matches(lease_token)
 	acquired = false
 	lease_token = ""
+
+func lock_directory_exists() -> bool:
+	return not lock_dir.is_empty() and DirAccess.dir_exists_absolute(lock_dir)
 
 func _generate_token() -> String:
 	return "%d.%d.%d" % [OS.get_process_id(), Time.get_ticks_usec(), randi()]
@@ -126,20 +131,35 @@ func _lease_activity_ms(lease: Dictionary) -> int:
 	var acquired_ms: int = int(lease.get("acquired_at_ms", 0))
 	return maxi(heartbeat_ms, acquired_ms)
 
+func _holder_is_authoritative(lease: Dictionary, identity: Dictionary) -> bool:
+	if not identity.get("alive", false):
+		return false
+	if OS.get_name() != "Linux":
+		return false
+	var pid: int = int(lease.get("pid", 0))
+	if pid == OS.get_process_id():
+		return true
+	var lease_start: int = int(lease.get("pid_start_ticks", -1))
+	var live_start: int = int(identity.get("start_ticks", -1))
+	return lease_start >= 0 and live_start >= 0 and lease_start == live_start
+
 func _is_lease_stale(lease: Dictionary) -> bool:
+	var pid: int = int(lease.get("pid", 0))
+	var identity: Dictionary = _process_identity(pid)
+	if _holder_is_authoritative(lease, identity):
+		return false
+	var lease_start: int = int(lease.get("pid_start_ticks", -1))
+	var live_start: int = int(identity.get("start_ticks", -1))
+	if identity.get("alive", false) and lease_start >= 0 and live_start >= 0 and lease_start != live_start:
+		return true
 	var activity_ms: int = _lease_activity_ms(lease)
 	if activity_ms <= 0:
 		return _dir_age_ms(lock_dir) >= STALE_MS
-	var pid: int = int(lease.get("pid", 0))
-	var identity: Dictionary = _process_identity(pid)
-	if identity.get("alive", false):
-		var lease_start: int = int(lease.get("pid_start_ticks", -1))
-		var live_start: int = int(identity.get("start_ticks", -1))
-		if lease_start >= 0 and live_start >= 0 and lease_start != live_start:
-			return true
 	return _now_ms() - activity_ms > STALE_MS
 
 func _dir_age_ms(path: String) -> int:
+	if test_dir_age_ms_override >= 0:
+		return test_dir_age_ms_override
 	var modified_sec: int = int(FileAccess.get_modified_time(path))
 	if modified_sec <= 0:
 		return 0
@@ -196,9 +216,24 @@ func _remove_lock_dir_if_token_matches(expected_token: String) -> void:
 
 func _remove_lock_dir_unconditional() -> bool:
 	if lock_dir.is_empty() or not DirAccess.dir_exists_absolute(lock_dir):
-		return false
-	var lease_path: String = lock_dir.path_join("lease.json")
-	if FileAccess.file_exists(lease_path):
-		DirAccess.remove_absolute(lease_path)
-	DirAccess.remove_absolute(lock_dir)
-	return true
+		return true
+	_cleanup_lock_artifacts()
+	return not DirAccess.dir_exists_absolute(lock_dir)
+
+func _cleanup_lock_artifacts() -> void:
+	if lock_dir.is_empty() or not DirAccess.dir_exists_absolute(lock_dir):
+		return
+	var dir: DirAccess = DirAccess.open(lock_dir)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var entry: String = dir.get_next()
+	while not entry.is_empty():
+		if entry != "." and entry != "..":
+			var artifact_path: String = lock_dir.path_join(entry)
+			if FileAccess.file_exists(artifact_path) or DirAccess.dir_exists_absolute(artifact_path):
+				DirAccess.remove_absolute(artifact_path)
+		entry = dir.get_next()
+	dir.list_dir_end()
+	if DirAccess.dir_exists_absolute(lock_dir):
+		DirAccess.remove_absolute(lock_dir)

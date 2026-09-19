@@ -5,6 +5,17 @@ const _Version = preload("res://core/api/icon_forge_version.gd")
 
 ## Canonical deterministic job/cache identity shared across ApiService and manifests.
 
+static func source_snapshot_matches(source_path: String, expected_source_hash: String, expected_dependency_hashes: Array) -> bool:
+	if IconForgeFileUtil.file_hash(source_path) != expected_source_hash:
+		return false
+	var current_hashes: Array[String] = dependency_hashes(source_path)
+	if current_hashes.size() != expected_dependency_hashes.size():
+		return false
+	for index in range(current_hashes.size()):
+		if str(current_hashes[index]) != str(expected_dependency_hashes[index]):
+			return false
+	return true
+
 static func dependency_hashes(source_path: String) -> Array[String]:
 	var hashes: Array[String] = []
 	for dependency in ResourceLoader.get_dependencies(source_path):
