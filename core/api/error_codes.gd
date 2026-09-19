@@ -44,6 +44,8 @@ const CODES: Dictionary = {
 	"OUTPUT_RESOLUTION_MISMATCH": {"recommended_action": "manual_composition_review", "status": "needs_review"},
 	"OUTPUT_WRITE_FAILED": {"recommended_action": "check_workspace_permissions", "status": "failed"},
 	"OUTPUT_EXISTS": {"recommended_action": "retry_same_request", "status": "failed"},
+	"OVERRIDE_INVALID": {"recommended_action": "fix_human_sidecar", "status": "failed"},
+	"VALIDATION_METADATA_REQUIRED": {"recommended_action": "use_production_manifest", "status": "failed"},
 }
 
 static func recommended_action(code: String) -> String:

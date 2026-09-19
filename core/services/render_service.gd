@@ -16,7 +16,9 @@ var loader: RefCounted = AssetLoaderScript.new()
 var stage_builder: RenderStageScript = RenderStageScript.new()
 
 func render(source_path: String, preset: PresetDefinition, override: Dictionary = {}, output_path: String = "", force: bool = false, options: Dictionary = {}) -> Dictionary:
-	var inspection: Dictionary = inspector.inspect(source_path)
+	var inspection: Dictionary = options.get("precomputed_inspection", {})
+	if inspection.is_empty():
+		inspection = inspector.inspect(source_path)
 	if not bool(inspection.get("success", false)):
 		return {
 			"success": false,
@@ -135,7 +137,8 @@ func _render_static_image(source_path: String, preset: PresetDefinition) -> Dict
 		return {"success": false, "source": source_path, "error": {"code": "SOURCE_IMAGE_LOAD_FAILED", "message": "Could not decode image source.", "path": source_path}}
 	var size: Vector2i = _resolution(preset) * int(preset.data.get("supersampling", 1))
 	var fitted: Image = _fit_static_image(image, size, preset)
-	return {"success": true, "image": fitted, "warnings": [], "render_passes": 1}
+	var metrics: Dictionary = processor.silhouette_metrics(fitted)
+	return {"success": true, "image": fitted, "warnings": [], "render_passes": 1, "metrics": metrics}
 
 func _fit_static_image(source: Image, target_size: Vector2i, preset: PresetDefinition) -> Image:
 	var image: Image = source.duplicate()

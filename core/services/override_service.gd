@@ -1,8 +1,19 @@
 extends RefCounted
 class_name OverrideService
 
+const ALLOWED_TOP_LEVEL: Array[String] = [
+	"yaw", "pitch", "roll", "occupancy", "padding", "scale",
+	"camera", "lighting", "composition", "environment", "width", "height", "background",
+]
+const ALLOWED_CAMERA_KEYS: Array[String] = [
+	"yaw", "pitch", "roll", "fov", "distance", "orthographic_size", "occupancy", "padding",
+	"min_zoom", "max_zoom", "orientation_strategy", "auto_frame",
+]
+const ALLOWED_LIGHTING_TYPES: Array[String] = ["key", "fill", "rim"]
+
 func sidecar_path(source_path: String) -> String:
-	return source_path.get_basename() + ".icon.json"
+	var stem: String = source_path.get_file().get_basename()
+	return source_path.get_base_dir().path_join("%s.icon.json" % stem)
 
 func load_for_source(source_path: String, explicit_path: String = "") -> Dictionary:
 	var path: String = explicit_path if not explicit_path.is_empty() else sidecar_path(source_path)
@@ -28,6 +39,9 @@ func save_for_source(source_path: String, override: Dictionary) -> Dictionary:
 
 func validate(override: Dictionary) -> Array:
 	var errors: Array = []
+	for key in override.keys():
+		if not ALLOWED_TOP_LEVEL.has(str(key)):
+			errors.append({"code": "OVERRIDE_UNKNOWN_FIELD", "path": str(key), "message": "Unknown sidecar field '%s'." % str(key)})
 	for key in ["yaw", "pitch", "roll"]:
 		if override.has(key) and not _finite_number(override[key]):
 			errors.append({"code": "OVERRIDE_VALUE_INVALID", "path": key, "message": "%s must be a finite number." % key})
@@ -40,6 +54,9 @@ func validate(override: Dictionary) -> Array:
 			errors.append({"code": "OVERRIDE_CAMERA_INVALID", "path": "camera", "message": "camera must be an object."})
 		else:
 			var camera: Dictionary = override["camera"]
+			for key in camera.keys():
+				if not ALLOWED_CAMERA_KEYS.has(str(key)):
+					errors.append({"code": "OVERRIDE_UNKNOWN_FIELD", "path": "camera.%s" % str(key), "message": "Unknown camera field '%s'." % str(key)})
 			for key in ["min_zoom", "max_zoom"]:
 				if camera.has(key) and (not _finite_number(camera[key]) or float(camera[key]) < 0.001 or float(camera[key]) > 100000.0):
 					errors.append({"code": "OVERRIDE_CAMERA_VALUE_INVALID", "path": "camera.%s" % key, "message": "%s must be between 0.001 and 100000." % key})

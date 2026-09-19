@@ -3,7 +3,13 @@ class_name ReviewQueue
 
 ## Structured human-review records for needs_review outcomes.
 
-const QUEUE_PATH: String = "generated/review_queue.json"
+var workspace_root: String = ""
+
+func _init(root: String = "") -> void:
+	if root.is_empty():
+		workspace_root = ProjectSettings.globalize_path("res://")
+	else:
+		workspace_root = IconStudioFileUtil.normalize_path(root)
 
 func record(entry: Dictionary) -> void:
 	var queue: Array = _load_queue()
@@ -15,16 +21,14 @@ func record(entry: Dictionary) -> void:
 func list_entries() -> Array:
 	return _load_queue()
 
+func queue_path() -> String:
+	return workspace_root.path_join("generated/review_queue.json")
+
 func _load_queue() -> Array:
-	var path: String = _absolute_queue_path()
-	var data: Dictionary = IconStudioFileUtil.read_json(path)
+	var data: Dictionary = IconStudioFileUtil.read_json(queue_path())
 	if data.has("entries") and data["entries"] is Array:
 		return data["entries"]
 	return []
 
 func _save_queue(entries: Array) -> void:
-	var path: String = _absolute_queue_path()
-	IconStudioFileUtil.write_json_atomic(path, {"schema_version": 1, "entries": entries})
-
-func _absolute_queue_path() -> String:
-	return ProjectSettings.globalize_path("res://").path_join(QUEUE_PATH)
+	IconStudioFileUtil.write_json_atomic(queue_path(), {"schema_version": 1, "entries": entries})

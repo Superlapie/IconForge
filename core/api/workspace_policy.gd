@@ -23,11 +23,6 @@ func resolve_asset_path(asset: String, explicit_asset_id: String = "") -> Dictio
 		return _error("PATH_NOT_ALLOWED", "Path traversal is not permitted.", asset)
 	var absolute: String = _resolve_to_absolute(asset)
 	if not FileAccess.file_exists(absolute):
-		if asset.begins_with("res://"):
-			absolute = ProjectSettings.globalize_path(asset)
-		elif not asset.is_absolute_path():
-			absolute = ProjectSettings.globalize_path("res://" + asset.trim_prefix("./"))
-	if not FileAccess.file_exists(absolute):
 		return _error("SOURCE_NOT_FOUND", "Source asset does not exist.", asset)
 	var identity: Dictionary = _AssetIdentity.resolve(asset, absolute, workspace_root, explicit_asset_id)
 	if not bool(identity.get("success", false)):
@@ -54,6 +49,11 @@ func resolve_output_path(purpose_id: String, asset_id: String, purpose_registry:
 		return _error("PATH_NOT_ALLOWED", "Resolved output escapes the generated root.", output_path)
 	return {"success": true, "path": output_path, "directory": output_dir}
 
+func is_manifest_path_allowed(path: String) -> bool:
+	var absolute: String = _normalize_absolute(path)
+	var manifests_dir: String = _normalize_absolute(generated_root.path_join("manifests"))
+	return absolute == manifests_dir or absolute.begins_with(manifests_dir + "/")
+
 func _is_under_generated_root(path: String) -> bool:
 	var absolute: String = _normalize_absolute(path)
 	var root: String = _normalize_absolute(generated_root)
@@ -68,10 +68,17 @@ func _contains_traversal(path: String) -> bool:
 
 func _resolve_to_absolute(path: String) -> String:
 	if path.begins_with("res://") or path.begins_with("user://"):
-		return ProjectSettings.globalize_path(path)
+		return _normalize_absolute(ProjectSettings.globalize_path(path))
 	if path.is_absolute_path():
 		return _normalize_absolute(path)
-	return _normalize_absolute(ProjectSettings.globalize_path("res://" + path.trim_prefix("./")))
+	var trimmed: String = path.trim_prefix("./")
+	var workspace_candidate: String = _normalize_absolute(workspace_root.path_join(trimmed))
+	if FileAccess.file_exists(workspace_candidate):
+		return workspace_candidate
+	var repo_candidate: String = _normalize_absolute(ProjectSettings.globalize_path("res://" + trimmed))
+	if FileAccess.file_exists(repo_candidate):
+		return repo_candidate
+	return workspace_candidate
 
 func _normalize_absolute(path: String) -> String:
 	if path.begins_with("res://") or path.begins_with("user://"):

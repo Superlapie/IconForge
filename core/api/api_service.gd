@@ -42,12 +42,13 @@ var render_service: RenderService = RenderService.new()
 var production_quality: RefCounted = _ProductionQuality.new()
 var job_service: RefCounted = _JobService.new()
 var manifest_service: RefCounted
-var review_queue: RefCounted = _ReviewQueue.new()
+var review_queue: RefCounted
 var overrides: OverrideService = OverrideService.new()
 
 func _init(workspace_root: String = "") -> void:
 	workspace = _Workspace.new(workspace_root)
 	manifest_service = _ManifestService.new(workspace.workspace_root)
+	review_queue = _ReviewQueue.new(workspace.workspace_root)
 
 func execute(request: Dictionary, safe_mode: bool = true) -> Dictionary:
 	var operation: String = str(request.get("operation", ""))
@@ -71,7 +72,7 @@ func execute(request: Dictionary, safe_mode: bool = true) -> Dictionary:
 		"validate_output":
 			return _validate_output_operation(validated_request)
 		"explain_result":
-			return _explain_result(validated_request)
+			return _explain_result(validated_request, safe_mode)
 		"render_expert":
 			return await _render_expert(validated_request)
 		_:
@@ -135,7 +136,10 @@ func _render_asset_pipeline(request: Dictionary, safe_mode: bool, shared_context
 	var preset_revision: int = int(recipe["preset_revision"])
 
 	var sidecar: Dictionary = overrides.load_for_source(source_path)
-	var sidecar_override: Dictionary = sidecar.get("override", {}) if bool(sidecar.get("success", true)) else {}
+	if not bool(sidecar.get("success", false)):
+		if bool(sidecar.get("found", false)):
+			return _terminal_failure("render_asset", _mapped_error(sidecar.get("error", {})), trace)
+	var sidecar_override: Dictionary = sidecar.get("override", {}) if bool(sidecar.get("found", false)) else {}
 	var effective_override: Dictionary = PresetDefinition.deep_merge(recipe.get("override_patch", {}), sidecar_override)
 	var effective_config_hash: String = _JobIdentity.effective_config_hash(preset, effective_override)
 
@@ -159,7 +163,7 @@ func _render_asset_pipeline(request: Dictionary, safe_mode: bool, shared_context
 	var output_path: String = output_result["path"]
 	IconStudioFileUtil.ensure_directory(output_path)
 
-	var collision: Dictionary = _check_output_collision(output_path, source_identity, job_id, force)
+	var collision: Dictionary = _check_output_collision(output_path, source_path)
 	if not collision.is_empty():
 		return collision
 
@@ -172,7 +176,7 @@ func _render_asset_pipeline(request: Dictionary, safe_mode: bool, shared_context
 	var max_passes: int = int(purpose_def.get("max_correction_passes", 3))
 	var render_result: Dictionary = await render_service.render(
 		source_path, preset, effective_override, temp_path, true,
-		{"skip_sidecar_load": true, "max_correction_passes": max_passes}
+		{"skip_sidecar_load": true, "max_correction_passes": max_passes, "precomputed_inspection": inspection}
 	)
 	state = RenderState.RENDERED
 	trace.append(_state_entry(state, {"render_passes": render_result.get("render_passes", 1)}))
@@ -199,21 +203,21 @@ func _render_asset_pipeline(request: Dictionary, safe_mode: bool, shared_context
 	state = RenderState.VALIDATED_OUTPUT
 	trace.append(_state_entry(state))
 
-	var commit_error: Error = IconStudioFileUtil.safe_replace_file(temp_path, output_path)
-	if commit_error != OK:
-		_cleanup_temp(temp_path)
-		return _Response.failure("render_asset", "WRITE_FAILED", "Could not commit validated output.", {"job_id": job_id, "trace": trace})
-
-	state = RenderState.COMMITTED
-	trace.append(_state_entry(state))
-
-	var output_sha256: String = IconStudioFileUtil.file_hash(output_path)
 	var manifest_payload: Dictionary = _build_manifest_payload(
 		"render_asset", job_id, source_path, source_hash, source_identity, dependency_hashes,
 		asset_id, purpose_id, preset_id, preset_revision, effective_override, effective_config_hash,
-		hints, inspection, recipe, quality, render_result, correction_actions, output_path, output_sha256, trace, false
+		hints, inspection, recipe, quality, render_result, correction_actions, output_path, "", trace, false
 	)
-	var manifest_path: String = manifest_service.write_manifest(job_id, manifest_payload)
+	var commit_result: Dictionary = manifest_service.commit_validated_render(temp_path, output_path, job_id, manifest_payload)
+	if not bool(commit_result.get("success", false)):
+		_cleanup_temp(temp_path)
+		var commit_err: Dictionary = commit_result.get("error", {"code": "WRITE_FAILED", "message": "Could not commit validated production bundle."})
+		return _Response.failure("render_asset", str(commit_err.get("code", "WRITE_FAILED")), str(commit_err.get("message", "Could not commit validated production bundle.")), {"job_id": job_id, "trace": trace})
+
+	state = RenderState.COMMITTED
+	trace.append(_state_entry(state))
+	var output_sha256: String = str(commit_result.get("output_sha256", ""))
+	var manifest_path: String = str(commit_result.get("path", ""))
 	job_service.store_job_record(job_id, {"job_id": job_id, "operation": "render_asset", "status": "validated", "manifest": manifest_path, "trace": trace})
 
 	state = RenderState.COMPLETED
@@ -289,7 +293,7 @@ func _render_asset_set(request: Dictionary, safe_mode: bool) -> Dictionary:
 	elif fail_count > 0:
 		aggregate_status = "failed"
 
-	var aggregate_manifest_path: String = manifest_service.write_manifest(aggregate_job_id, {
+	var aggregate_manifest_result: Dictionary = manifest_service.write_manifest(aggregate_job_id, {
 		"operation": "render_asset_set",
 		"source": source_path,
 		"source_hash": shared_context["source_hash"],
@@ -301,7 +305,10 @@ func _render_asset_set(request: Dictionary, safe_mode: bool) -> Dictionary:
 		"status": aggregate_status,
 		"summary": {"total": outputs.size(), "validated": validated_count, "needs_review": review_count, "failed": fail_count},
 	})
-	job_service.store_job_record(aggregate_job_id, {"job_id": aggregate_job_id, "operation": "render_asset_set", "status": aggregate_status, "manifest": aggregate_manifest_path})
+	var aggregate_manifest_path: String = ""
+	if bool(aggregate_manifest_result.get("success", false)):
+		aggregate_manifest_path = str(aggregate_manifest_result.get("path", ""))
+		job_service.store_job_record(aggregate_job_id, {"job_id": aggregate_job_id, "operation": "render_asset_set", "status": aggregate_status, "manifest": aggregate_manifest_path})
 
 	return {
 		"schema_version": _Schema.CURRENT_SCHEMA_VERSION,
@@ -338,7 +345,13 @@ func _validate_output_operation(request: Dictionary) -> Dictionary:
 	if not FileAccess.file_exists(output_path):
 		output_path = ProjectSettings.globalize_path(output_path) if output_path.begins_with("res://") else output_path
 
-	var quality: Dictionary = production_quality.validate_output(output_path, purpose_def, preset, {})
+	var frame_metrics: Dictionary = {}
+	var production_manifest: Dictionary = manifest_service.find_manifest_by_output_path(output_path)
+	if not production_manifest.is_empty():
+		var manifest_output_sha: String = str(production_manifest.get("output", {}).get("sha256", ""))
+		if manifest_output_sha.is_empty() or manifest_output_sha == IconStudioFileUtil.file_hash(output_path):
+			frame_metrics = production_manifest.get("quality", {}).get("metrics", {})
+	var quality: Dictionary = production_quality.validate_output(output_path, purpose_def, preset, frame_metrics)
 	if bool(quality.get("success", false)):
 		return _Response.success("validate_output", {
 			"status": "validated",
@@ -350,12 +363,15 @@ func _validate_output_operation(request: Dictionary) -> Dictionary:
 	var primary: Dictionary = quality.get("errors", [{}])[0]
 	return _Response.failure("validate_output", str(primary.get("code", "QUALITY_FAILED")), str(primary.get("message", "Validation failed.")), {"quality": quality})
 
-func _explain_result(request: Dictionary) -> Dictionary:
+func _explain_result(request: Dictionary, safe_mode: bool = true) -> Dictionary:
 	var manifest_data: Dictionary = {}
 	if request.has("job_id"):
 		manifest_data = manifest_service.find_manifest_by_job_id(str(request["job_id"]))
 	if manifest_data.is_empty() and request.has("manifest"):
-		manifest_data = manifest_service.read_manifest(str(request["manifest"]))
+		var manifest_path: String = str(request["manifest"])
+		if safe_mode and not workspace.is_manifest_path_allowed(manifest_path):
+			return _Response.failure("explain_result", "PATH_NOT_ALLOWED", "Manifest path is outside the workspace manifest directory.")
+		manifest_data = manifest_service.read_manifest(manifest_path)
 	if manifest_data.is_empty():
 		return _Response.failure("explain_result", "JOB_NOT_FOUND", "No manifest found for the requested job.")
 
@@ -426,22 +442,20 @@ func _try_cache_hit(output_path: String, purpose_def: Dictionary, preset: Preset
 	var manifest_path: String = manifest_service.manifest_path_for_job(job_id)
 	return _success_render(job_id, asset_id, purpose_id, output_path, output_sha256, preset, preset_id, preset_revision, quality, {"render_passes": manifest.get("correction", {}).get("passes", 0)}, manifest.get("correction", {}).get("actions", []), manifest_path, manifest.get("trace", []), true)
 
-func _check_output_collision(output_path: String, source_identity: String, job_id: String, force: bool) -> Dictionary:
+func _check_output_collision(output_path: String, source_path: String) -> Dictionary:
 	if not FileAccess.file_exists(output_path):
 		return {}
-	var manifest: Dictionary = manifest_service.find_manifest_by_job_id(job_id)
-	if manifest.is_empty():
-		for entry in DirAccess.get_files_at(manifest_service.manifests_dir()):
-			var candidate: Dictionary = manifest_service.read_manifest(manifest_service.manifests_dir().path_join(entry))
-			var candidate_output: String = str(candidate.get("output", {}).get("path", ""))
-			if candidate_output == output_path and str(candidate.get("source_identity", "")) != source_identity:
-				if force:
-					return {}
-				return _Response.failure("render_asset", "ASSET_ID_COLLISION", "Output path is already owned by a different source identity.", {"path": output_path, "existing_source_identity": candidate.get("source_identity", "")})
+	var owned: Dictionary = manifest_service.find_manifest_by_output_path(output_path)
+	if owned.is_empty():
 		return {}
-	if str(manifest.get("source_identity", "")) != source_identity and not force:
-		return _Response.failure("render_asset", "ASSET_ID_COLLISION", "Output path is already owned by a different source identity.", {"path": output_path, "existing_source_identity": manifest.get("source_identity", "")})
+	var owned_source: String = _normalize_source_path(str(owned.get("source", "")))
+	var current_source: String = _normalize_source_path(source_path)
+	if owned_source != current_source:
+		return _Response.failure("render_asset", "ASSET_ID_COLLISION", "Output path is already owned by a different source.", {"path": output_path, "existing_source": owned.get("source", "")})
 	return {}
+
+func _normalize_source_path(path: String) -> String:
+	return IconStudioFileUtil.normalize_path(path)
 
 func _success_render(job_id: String, asset_id: String, purpose_id: String, output_path: String, output_sha256: String, preset: PresetDefinition, preset_id: String, preset_revision: int, quality: Dictionary, render_result: Dictionary, correction_actions: Array, manifest_path: String, trace: Array, cache_hit: bool) -> Dictionary:
 	return _Response.success("render_asset", {
@@ -506,7 +520,7 @@ func _handle_render_failure(operation: String, error: Dictionary, trace: Array, 
 		"recommended_action": _ErrorCodes.recommended_action(code),
 		"trace": trace,
 	})
-	manifest_service.write_manifest(job_id, {
+	var _unused: Dictionary = manifest_service.write_manifest(job_id, {
 		"operation": operation,
 		"source": source_path,
 		"asset_id": asset_id,
@@ -527,8 +541,6 @@ func _handle_quality_failure(operation: String, quality: Dictionary, trace: Arra
 	var primary: Dictionary = quality.get("errors", [{}])[0]
 	var code: String = str(primary.get("code", "QUALITY_FAILED"))
 	if code in ["OUTPUT_CLIPPED", "OCCUPANCY_LOW", "OCCUPANCY_HIGH"]:
-		pass
-	elif code == "OUTPUT_CLIPPED":
 		code = "FRAMING_UNRESOLVED"
 
 	review_queue.record({
@@ -544,7 +556,7 @@ func _handle_quality_failure(operation: String, quality: Dictionary, trace: Arra
 		"trace": trace,
 	})
 
-	manifest_service.write_manifest(job_id, {
+	var _unused_review_manifest: Dictionary = manifest_service.write_manifest(job_id, {
 		"operation": operation,
 		"source": source_path,
 		"source_hash": source_hash,

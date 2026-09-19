@@ -3,6 +3,15 @@ class_name IconStudioFileUtil
 
 const APP_DIR: String = "user://iconstudio"
 
+## Test seam: when true, safe_replace_file fails after creating backup (rename step).
+static var test_fail_replace_after_backup: bool = false
+## Test seam: when set, write_json_atomic returns this error without writing.
+static var test_write_json_atomic_error: Error = OK
+
+static func reset_test_seams() -> void:
+	test_fail_replace_after_backup = false
+	test_write_json_atomic_error = OK
+
 static func ensure_directory(path: String) -> Error:
 	var absolute: String = path
 	if path.begins_with("res://") or path.begins_with("user://"):
@@ -22,32 +31,51 @@ static func read_json(path: String) -> Dictionary:
 	var parsed: Variant = JSON.parse_string(file.get_as_text())
 	return parsed if parsed is Dictionary else {}
 
+static func _absolute_path(path: String) -> String:
+	if path.begins_with("res://") or path.begins_with("user://"):
+		return ProjectSettings.globalize_path(path)
+	return path
+
 static func safe_replace_file(temp_path: String, destination_path: String) -> Error:
 	if not FileAccess.file_exists(temp_path):
 		return ERR_FILE_NOT_FOUND
-	var absolute_temp: String = ProjectSettings.globalize_path(temp_path) if temp_path.begins_with("res://") or temp_path.begins_with("user://") else temp_path
-	var absolute_destination: String = ProjectSettings.globalize_path(destination_path) if destination_path.begins_with("res://") or destination_path.begins_with("user://") else destination_path
+	var absolute_temp: String = _absolute_path(temp_path)
+	var absolute_destination: String = _absolute_path(destination_path)
 	var dir_error: Error = ensure_directory(absolute_destination)
 	if dir_error != OK:
 		return dir_error
 	var backup_path: String = "%s.bak.%s" % [absolute_destination, str(Time.get_ticks_usec())]
 	var had_destination: bool = FileAccess.file_exists(absolute_destination)
+	var destination_before: String = ""
 	if had_destination:
+		destination_before = FileAccess.get_sha256(absolute_destination)
 		var copy_error: Error = DirAccess.copy_absolute(absolute_destination, backup_path)
 		if copy_error != OK:
 			return copy_error
+	if test_fail_replace_after_backup:
+		if FileAccess.file_exists(backup_path):
+			DirAccess.remove_absolute(backup_path)
+		return ERR_CANT_CREATE
 	var rename_error: Error = DirAccess.rename_absolute(absolute_temp, absolute_destination)
 	if rename_error != OK:
 		if had_destination and FileAccess.file_exists(backup_path):
-			if FileAccess.file_exists(absolute_destination):
-				DirAccess.remove_absolute(absolute_destination)
-			DirAccess.rename_absolute(backup_path, absolute_destination)
+			var restore_error: Error = DirAccess.copy_absolute(backup_path, absolute_destination)
+			if restore_error != OK:
+				return restore_error
+			if FileAccess.get_sha256(absolute_destination) != destination_before:
+				return ERR_BUG
+		if FileAccess.file_exists(absolute_temp):
+			DirAccess.remove_absolute(absolute_temp)
+		if FileAccess.file_exists(backup_path):
+			DirAccess.remove_absolute(backup_path)
 		return rename_error
 	if had_destination and FileAccess.file_exists(backup_path):
 		DirAccess.remove_absolute(backup_path)
 	return OK
 
 static func write_json_atomic(path: String, value: Variant) -> Error:
+	if test_write_json_atomic_error != OK:
+		return test_write_json_atomic_error
 	var dir_error: Error = ensure_directory(path)
 	if dir_error != OK:
 		return dir_error
@@ -114,10 +142,6 @@ static func collect_sources(path: String, recursive: bool = true) -> Array[Strin
 	return output
 
 static func is_embedded_texture_output(path: String) -> bool:
-	# Godot extracts embedded GLB textures beside the source as names such as
-	# Model_0.png. They are dependencies of the model, not independent batch
-	# inputs. Keep explicit user images supported unless a sibling GLB/glTF with
-	# the matching base name proves this is an importer-generated texture.
 	var extension: String = path.get_extension().to_lower()
 	if not ["png", "jpg", "jpeg", "webp"].has(extension):
 		return false

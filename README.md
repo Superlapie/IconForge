@@ -15,7 +15,7 @@ Icon Studio turns GLB/glTF models and static images into production-ready PNG ga
 2. **deterministically auto-corrected + validated output**, or
 3. **`needs_review` / `failed`** with structured recovery guidance
 
-There is no normal path where an agent misunderstands the tool, gets `success: true`, and quietly produces garbage.
+Safe mode is designed so production-invalid outputs fail validation or are escalated for review rather than silently accepted.
 
 ![Icon Studio GUI — live preview, preset inspector, and export workflow](docs/assets/icon-studio-ui.png)
 

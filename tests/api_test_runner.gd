@@ -6,6 +6,7 @@ var passed: Array = []
 var scenarios_run: int = 0
 const ApiServiceScript = preload("res://core/api/api_service.gd")
 var api: RefCounted = ApiServiceScript.new()
+var overrides: OverrideService = OverrideService.new()
 var repo_root: String = ProjectSettings.globalize_path("res://")
 
 func run() -> Dictionary:
@@ -34,6 +35,23 @@ func run() -> Dictionary:
 	await _scenario_validate_output()
 	await _scenario_explain_result()
 	await _scenario_safe_replace_preserves_on_failure()
+	await _scenario_workspace_relative_source()
+	await _scenario_force_collision_protection()
+	await _scenario_invalid_sidecar_fails_closed()
+	await _scenario_sidecar_typo_rejected()
+	await _scenario_source_mutation_invalidates_cache()
+	await _scenario_manifest_commit_failure_blocks_validated()
+	await _scenario_replace_failure_preserves_destination()
+	await _scenario_portable_default_asset_id()
+	await _scenario_validate_portrait_outputs()
+	await _scenario_static_image_portrait()
+	await _scenario_render_asset_set_inspects_once()
+	await _scenario_safe_manifest_path_confinement()
+	await _scenario_aggregate_failed()
+	await _scenario_aggregate_partial_and_review()
+	await _scenario_review_queue_workspace()
+	IconStudioFileUtil.reset_test_seams()
+	AssetInspector.reset_inspect_count()
 	return {
 		"success": failures.is_empty(),
 		"passed": passed,
@@ -312,12 +330,11 @@ func _scenario_corrupt_output_invalidates_cache() -> void:
 
 func _scenario_sidecar_precedence() -> void:
 	scenarios_run += 1
-	var sword: String = repo_root.path_join("fixtures/sword.gltf")
-	var sidecar_path: String = sword.get_basename() + ".icon.json"
-	var had_sidecar: bool = FileAccess.file_exists(sidecar_path)
-	var original: String = ""
-	if had_sidecar:
-		original = FileAccess.get_file_as_string(sidecar_path)
+	var temp_dir: String = repo_root.path_join("out/sidecar_prec_%d" % Time.get_ticks_usec())
+	DirAccess.make_dir_recursive_absolute(temp_dir)
+	var sword: String = temp_dir.path_join("sword.gltf")
+	DirAccess.copy_absolute(repo_root.path_join("fixtures/sword.gltf"), sword)
+	var sidecar_path: String = overrides.sidecar_path(sword)
 	IconStudioFileUtil.write_json_atomic(sidecar_path, {"yaw": 33, "occupancy": 0.77})
 	var with_hint: Dictionary = await api.execute({
 		"schema_version": 1,
@@ -328,10 +345,42 @@ func _scenario_sidecar_precedence() -> void:
 		"force": true,
 	})
 	_assert(bool(with_hint.get("success", false)) or str(with_hint.get("status", "")) == "needs_review", "sidecar precedence render completes")
-	if had_sidecar:
-		IconStudioFileUtil.write_text_atomic(sidecar_path, original)
-	elif FileAccess.file_exists(sidecar_path):
-		DirAccess.remove_absolute(sidecar_path)
+
+func _scenario_invalid_sidecar_fails_closed() -> void:
+	scenarios_run += 1
+	var temp_dir: String = repo_root.path_join("out/sidecar_bad_%d" % Time.get_ticks_usec())
+	DirAccess.make_dir_recursive_absolute(temp_dir)
+	var sword: String = temp_dir.path_join("sword.gltf")
+	DirAccess.copy_absolute(repo_root.path_join("fixtures/sword.gltf"), sword)
+	var sidecar_path: String = overrides.sidecar_path(sword)
+	IconStudioFileUtil.write_text_atomic(sidecar_path, "{not json")
+	var result: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": sword,
+		"purpose": "inventory_icon",
+		"force": true,
+	})
+	_assert(not bool(result.get("success", true)), "invalid sidecar blocks render")
+	_assert(str(result.get("code", "")) == "OVERRIDE_INVALID", "invalid sidecar code")
+
+func _scenario_sidecar_typo_rejected() -> void:
+	scenarios_run += 1
+	var temp_dir: String = repo_root.path_join("out/sidecar_typo_%d" % Time.get_ticks_usec())
+	DirAccess.make_dir_recursive_absolute(temp_dir)
+	var sword: String = temp_dir.path_join("sword.gltf")
+	DirAccess.copy_absolute(repo_root.path_join("fixtures/sword.gltf"), sword)
+	var sidecar_path: String = overrides.sidecar_path(sword)
+	IconStudioFileUtil.write_json_atomic(sidecar_path, {"ocupancy": 0.8})
+	var result: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": sword,
+		"purpose": "inventory_icon",
+		"force": true,
+	})
+	_assert(not bool(result.get("success", true)), "sidecar typo blocks render")
+	_assert(str(result.get("code", "")) == "OVERRIDE_INVALID", "sidecar typo code")
 
 func _scenario_same_basename_collision() -> void:
 	scenarios_run += 1
@@ -441,6 +490,262 @@ func _scenario_safe_replace_preserves_on_failure() -> void:
 	var error: Error = IconStudioFileUtil.safe_replace_file(repo_root.path_join("out/missing-temp.txt"), dest)
 	_assert(error != OK, "safe_replace missing temp fails")
 	_assert(FileAccess.get_file_as_string(dest) == original, "safe_replace preserves destination on failure")
+
+func _scenario_workspace_relative_source() -> void:
+	scenarios_run += 1
+	var ws: String = repo_root.path_join("out/ws_relative_%d" % Time.get_ticks_usec())
+	var asset_dir: String = ws.path_join("assets/items")
+	DirAccess.make_dir_recursive_absolute(asset_dir)
+	var asset_rel: String = "assets/items/test_sword.gltf"
+	DirAccess.copy_absolute(repo_root.path_join("fixtures/sword.gltf"), asset_dir.path_join("test_sword.gltf"))
+	var external_api: RefCounted = ApiServiceScript.new(ws)
+	var result: Dictionary = await external_api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": asset_rel,
+		"purpose": "inventory_icon",
+		"force": true,
+	})
+	_assert(bool(result.get("success", false)), "workspace relative source renders")
+	_assert(str(result["output"]["path"]).begins_with(ws.path_join("generated")), "workspace relative output confined")
+
+func _scenario_force_collision_protection() -> void:
+	scenarios_run += 1
+	var dir_a: String = repo_root.path_join("out/force_collision_a")
+	var dir_b: String = repo_root.path_join("out/force_collision_b")
+	DirAccess.make_dir_recursive_absolute(dir_a)
+	DirAccess.make_dir_recursive_absolute(dir_b)
+	var copy_a: String = dir_a.path_join("alpha.gltf")
+	var copy_b: String = dir_b.path_join("beta.gltf")
+	DirAccess.copy_absolute(repo_root.path_join("fixtures/sword.gltf"), copy_a)
+	DirAccess.copy_absolute(repo_root.path_join("fixtures/potion.gltf"), copy_b)
+	var shared_id: String = "shared_output_id"
+	var first: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": copy_a,
+		"purpose": "inventory_icon",
+		"asset_id": shared_id,
+		"force": true,
+	})
+	_assert(bool(first.get("success", false)), "force collision first render")
+	var second: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": copy_b,
+		"purpose": "inventory_icon",
+		"asset_id": shared_id,
+		"force": true,
+	})
+	_assert(not bool(second.get("success", true)), "force collision blocked")
+	_assert(str(second.get("code", "")) == "ASSET_ID_COLLISION", "force collision code")
+
+func _scenario_source_mutation_invalidates_cache() -> void:
+	scenarios_run += 1
+	var temp_dir: String = repo_root.path_join("out/mutate_%d" % Time.get_ticks_usec())
+	DirAccess.make_dir_recursive_absolute(temp_dir)
+	var source_path: String = temp_dir.path_join("mutate.gltf")
+	DirAccess.copy_absolute(repo_root.path_join("fixtures/sword.gltf"), source_path)
+	var request: Dictionary = {
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": source_path,
+		"purpose": "neutral_thumbnail",
+	}
+	var first: Dictionary = await api.execute(request)
+	_assert(bool(first.get("success", false)), "source mutation first render")
+	var second: Dictionary = await api.execute(request)
+	_assert(bool(second.get("cache_hit", false)), "source mutation cache hit before mutate")
+	var overwrite: Error = DirAccess.copy_absolute(repo_root.path_join("fixtures/potion.gltf"), source_path)
+	_assert(overwrite == OK, "source mutation replaced file bytes")
+	var third: Dictionary = await api.execute(request)
+	_assert(bool(third.get("success", false)), "source mutation rerender succeeds")
+	_assert(not bool(third.get("cache_hit", true)), "source mutation invalidates cache")
+	if bool(third.get("success", false)):
+		var first_manifest: Dictionary = IconStudioFileUtil.read_json(str(first.get("manifest", "")))
+		var third_manifest: Dictionary = IconStudioFileUtil.read_json(str(third.get("manifest", "")))
+		_assert(str(first_manifest.get("source_hash", "")) != str(third_manifest.get("source_hash", "")), "source mutation changes source hash")
+
+func _scenario_manifest_commit_failure_blocks_validated() -> void:
+	scenarios_run += 1
+	IconStudioFileUtil.reset_test_seams()
+	IconStudioFileUtil.test_write_json_atomic_error = ERR_CANT_CREATE
+	var sword: String = repo_root.path_join("fixtures/sword.gltf")
+	var result: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": sword,
+		"purpose": "inventory_icon",
+		"asset_id": "manifest_commit_failure_probe",
+		"hints": {"asset_class": "generic"},
+		"force": true,
+	})
+	IconStudioFileUtil.reset_test_seams()
+	_assert(not bool(result.get("success", true)), "manifest failure not validated")
+	_assert(str(result.get("code", "")) == "WRITE_FAILED", "manifest failure code")
+
+func _scenario_replace_failure_preserves_destination() -> void:
+	scenarios_run += 1
+	IconStudioFileUtil.reset_test_seams()
+	var dest: String = repo_root.path_join("out/replace_failure_dest.txt")
+	var temp: String = repo_root.path_join("out/replace_failure_temp.txt")
+	var original: String = "keep-me"
+	IconStudioFileUtil.write_text_atomic(dest, original)
+	IconStudioFileUtil.write_text_atomic(temp, "replacement")
+	IconStudioFileUtil.test_fail_replace_after_backup = true
+	var error: Error = IconStudioFileUtil.safe_replace_file(temp, dest)
+	IconStudioFileUtil.reset_test_seams()
+	_assert(error != OK, "injected replace failure returns error")
+	_assert(FileAccess.get_file_as_string(dest) == original, "injected replace failure preserves destination")
+
+func _scenario_portable_default_asset_id() -> void:
+	scenarios_run += 1
+	var ws1: String = repo_root.path_join("out/portable_ws1_%d" % Time.get_ticks_usec())
+	var ws2: String = repo_root.path_join("out/portable_ws2_%d" % Time.get_ticks_usec())
+	for ws in [ws1, ws2]:
+		DirAccess.make_dir_recursive_absolute(ws.path_join("assets/items"))
+		DirAccess.copy_absolute(repo_root.path_join("fixtures/sword.gltf"), ws.path_join("assets/items/sword.gltf"))
+	var api1: RefCounted = ApiServiceScript.new(ws1)
+	var api2: RefCounted = ApiServiceScript.new(ws2)
+	var rel: String = "assets/items/sword.gltf"
+	var r1: Dictionary = await api1.execute({"schema_version": 1, "operation": "inspect_asset", "asset": rel})
+	var r2: Dictionary = await api2.execute({"schema_version": 1, "operation": "inspect_asset", "asset": rel})
+	_assert(bool(r1.get("success", false)) and bool(r2.get("success", false)), "portable inspect succeeds")
+	_assert(str(r1["inspection"].get("asset_id", "")) == str(r2["inspection"].get("asset_id", "")), "portable default asset_id matches")
+
+func _scenario_validate_portrait_outputs() -> void:
+	scenarios_run += 1
+	var sword: String = repo_root.path_join("fixtures/sword.gltf")
+	for purpose in ["npc_portrait", "creature_portrait", "boss_portrait"]:
+		var render: Dictionary = await api.execute({
+			"schema_version": 1,
+			"operation": "render_asset",
+			"asset": sword,
+			"purpose": purpose,
+			"force": true,
+		})
+		if not bool(render.get("success", false)):
+			_assert(false, "validate portrait prerequisite %s" % purpose)
+			continue
+		var validate: Dictionary = await api.execute({
+			"schema_version": 1,
+			"operation": "validate_output",
+			"asset": sword,
+			"output": str(render["output"]["path"]),
+			"purpose": purpose,
+		})
+		_assert(bool(validate.get("success", false)), "validate_output portrait %s" % purpose)
+
+func _scenario_static_image_portrait() -> void:
+	scenarios_run += 1
+	var sword: String = repo_root.path_join("fixtures/sword.gltf")
+	var icon: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": sword,
+		"purpose": "inventory_icon",
+		"force": true,
+	})
+	if not bool(icon.get("success", false)):
+		_assert(false, "static portrait prerequisite icon")
+		return
+	var png_path: String = str(icon["output"]["path"])
+	var portrait: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": png_path,
+		"purpose": "npc_portrait",
+		"force": true,
+	})
+	_assert(bool(portrait.get("success", false)) or str(portrait.get("status", "")) == "needs_review", "static image npc_portrait completes")
+
+func _scenario_render_asset_set_inspects_once() -> void:
+	scenarios_run += 1
+	AssetInspector.reset_inspect_count()
+	var sword: String = repo_root.path_join("fixtures/sword.gltf")
+	await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset_set",
+		"asset": sword,
+		"outputs": ["inventory_icon", "shop_thumbnail"],
+		"force": true,
+	})
+	_assert(AssetInspector.inspect_count == 1, "render_asset_set inspects source once")
+
+func _scenario_safe_manifest_path_confinement() -> void:
+	scenarios_run += 1
+	var result: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "explain_result",
+		"manifest": "/etc/passwd",
+	})
+	_assert(not bool(result.get("success", true)), "arbitrary manifest path rejected")
+	_assert(str(result.get("code", "")) == "PATH_NOT_ALLOWED", "manifest path confinement code")
+
+func _scenario_aggregate_failed() -> void:
+	scenarios_run += 1
+	var result: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset_set",
+		"asset": "missing-aggregate.glb",
+		"outputs": ["inventory_icon", "shop_thumbnail"],
+	})
+	_assert(not bool(result.get("success", true)), "aggregate missing source fails")
+	_assert(str(result.get("status", "")) == "failed", "aggregate missing source status failed")
+
+func _scenario_aggregate_partial_and_review() -> void:
+	scenarios_run += 1
+	var dir_a: String = repo_root.path_join("out/agg_a")
+	var dir_b: String = repo_root.path_join("out/agg_b")
+	DirAccess.make_dir_recursive_absolute(dir_a)
+	DirAccess.make_dir_recursive_absolute(dir_b)
+	var copy_a: String = dir_a.path_join("owner.gltf")
+	var copy_b: String = dir_b.path_join("challenger.gltf")
+	DirAccess.copy_absolute(repo_root.path_join("fixtures/sword.gltf"), copy_a)
+	DirAccess.copy_absolute(repo_root.path_join("fixtures/potion.gltf"), copy_b)
+	var owner: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": copy_a,
+		"purpose": "inventory_icon",
+		"asset_id": "agg_partial_owner",
+		"force": true,
+	})
+	_assert(bool(owner.get("success", false)), "aggregate partial owner renders")
+	var mixed: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset_set",
+		"asset": copy_b,
+		"asset_id": "agg_partial_owner",
+		"outputs": ["inventory_icon", "shop_thumbnail"],
+		"force": true,
+	})
+	_assert(str(mixed.get("status", "")) == "partial_success", "aggregate mixed collision is partial_success")
+	var png: Image = Image.create(32, 32, false, Image.FORMAT_RGBA8)
+	png.fill(Color(0, 0, 0, 0))
+	var empty_path: String = repo_root.path_join("out/empty_portrait_src.png")
+	png.save_png(empty_path)
+	var review: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset_set",
+		"asset": empty_path,
+		"outputs": ["inventory_icon", "shop_thumbnail"],
+		"force": true,
+	})
+	_assert(str(review.get("status", "")) in ["needs_review", "failed", "partial_success"], "aggregate empty image is non-validated")
+	if str(review.get("status", "")) == "needs_review":
+		_assert(int(review.get("summary", {}).get("validated", 1)) == 0, "needs_review aggregate has zero validated")
+
+func _scenario_review_queue_workspace() -> void:
+	scenarios_run += 1
+	var ws: String = repo_root.path_join("out/review_ws_%d" % Time.get_ticks_usec())
+	DirAccess.make_dir_recursive_absolute(ws)
+	var ReviewQueueScript = load("res://core/api/review_queue.gd")
+	var queue: RefCounted = ReviewQueueScript.new(ws)
+	queue.record({"code": "FRAMING_UNRESOLVED", "purpose": "inventory_icon"})
+	var path: String = str(queue.queue_path())
+	_assert(path.begins_with(ws.path_join("generated")), "review queue uses workspace generated root")
+	_assert(FileAccess.file_exists(path), "review queue wrote workspace file")
 
 func _assert(condition: bool, label: String) -> void:
 	if condition:

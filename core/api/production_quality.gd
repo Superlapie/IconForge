@@ -24,14 +24,13 @@ func validate_output(path: String, purpose_def: Dictionary, preset: PresetDefini
 	var occupancy_min: float = float(purpose_def.get("occupancy_min", 0.40))
 	var occupancy_max: float = float(purpose_def.get("occupancy_max", 0.98))
 
-	if metrics.is_empty() and FileAccess.file_exists(path):
+	if metrics.is_empty() and analyze_alpha and FileAccess.file_exists(path):
 		var image: Image = Image.new()
 		if image.load(path) == OK:
 			metrics = ImageProcessor.new().silhouette_metrics(image)
 
-	if not bool(metrics.get("has_silhouette", false)):
-		errors.append(_issue("OUTPUT_EMPTY", "Output contains no visible silhouette.", path))
-	else:
+	var has_framing_metrics: bool = bool(metrics.get("has_silhouette", false))
+	if has_framing_metrics:
 		var occupancy: float = float(metrics.get("occupancy", 0.0))
 		if bool(metrics.get("clipped", false)):
 			errors.append(_issue("OUTPUT_CLIPPED", "Silhouette touches the image border after bounded correction.", path))
@@ -39,6 +38,10 @@ func validate_output(path: String, purpose_def: Dictionary, preset: PresetDefini
 			errors.append(_issue("OCCUPANCY_LOW", "Occupancy %.3f is below purpose minimum %.3f." % [occupancy, occupancy_min], path))
 		elif occupancy > occupancy_max:
 			errors.append(_issue("OCCUPANCY_HIGH", "Occupancy %.3f exceeds purpose maximum %.3f." % [occupancy, occupancy_max], path))
+	elif analyze_alpha:
+		errors.append(_issue("OUTPUT_EMPTY", "Output contains no visible silhouette.", path))
+	elif frame_metrics.is_empty():
+		warnings.append(_issue("VALIDATION_METADATA_REQUIRED", "Framing occupancy was not inferred from an opaque final image. Use the production manifest metrics.", path))
 
 	var primary_code: String = ""
 	if not errors.is_empty():

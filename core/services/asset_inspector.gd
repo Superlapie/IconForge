@@ -5,7 +5,13 @@ const AssetLoaderScript = preload("res://core/services/asset_loader.gd")
 
 var loader: RefCounted = AssetLoaderScript.new()
 
+static var inspect_count: int = 0
+
+static func reset_inspect_count() -> void:
+	inspect_count = 0
+
 func inspect(source_path: String) -> Dictionary:
+	inspect_count += 1
 	if not FileAccess.file_exists(source_path):
 		return _failure("SOURCE_NOT_FOUND", "Source asset does not exist.", source_path)
 	var extension: String = source_path.get_extension().to_lower()

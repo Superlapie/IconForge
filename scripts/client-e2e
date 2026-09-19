@@ -4,26 +4,39 @@ set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKSPACE="${ROOT}/out/client_e2e_workspace"
 rm -rf "$WORKSPACE"
-mkdir -p "$WORKSPACE"
+mkdir -p "$WORKSPACE/assets/items"
+
+cp "$ROOT/fixtures/sword.gltf" "$WORKSPACE/assets/items/runic_sword.gltf"
 
 export ICONSTUDIO_WORKSPACE_ROOT="$WORKSPACE"
 
 python3 "$ROOT/examples/enigma_client.py" >/dev/null || exit 1
 
-python3 - <<'PY' "$ROOT"
-import json, sys
+python3 - <<'PY' "$ROOT" "$WORKSPACE"
+import sys
 from pathlib import Path
 from examples.enigma_client import IconStudioClient
 
 root = Path(sys.argv[1])
-client = IconStudioClient(workspace_root=root / "out/client_e2e_workspace")
+workspace = Path(sys.argv[2])
+client = IconStudioClient(workspace_root=workspace)
 cap = client.capabilities()
 assert cap.get("success"), cap
-render = client.render_asset(str(root / "fixtures/sword.gltf"), "inventory_icon", force=True)
+render = client.render_asset(
+    "assets/items/runic_sword.gltf",
+    "inventory_icon",
+    hints={"asset_class": "weapon"},
+    force=True,
+)
 assert render.get("success") and render.get("status") == "validated", render
 assert render.get("manifest"), "manifest required"
-assert str(render["output"]["path"]).startswith(str(root / "out/client_e2e_workspace")), render
-second = client.render_asset(str(root / "fixtures/sword.gltf"), "inventory_icon")
+assert str(render["output"]["path"]).startswith(str(workspace)), render
+assert render.get("recipe", {}).get("id") == "weapon", render
+second = client.render_asset(
+    "assets/items/runic_sword.gltf",
+    "inventory_icon",
+    hints={"asset_class": "weapon"},
+)
 assert second.get("cache_hit"), second
 assert second.get("manifest"), "cache hit must include manifest"
 print("PASS client-e2e")

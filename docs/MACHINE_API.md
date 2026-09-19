@@ -2,6 +2,16 @@
 
 > **Primary interface for AI agents.** Autonomous agents integrate through this API — not by scraping terminal output or guessing renderer parameters.
 
+## Source path resolution
+
+When `--workspace-root` or `ICONSTUDIO_WORKSPACE_ROOT` is set, relative `asset` paths resolve under that workspace first.
+
+| `asset` value | Resolves to |
+|---------------|-------------|
+| `assets/items/sword.glb` | `<workspace_root>/assets/items/sword.glb` |
+| `res://fixtures/sword.gltf` | Icon Studio repository resource |
+| `/absolute/path/model.glb` | Explicit absolute path |
+
 ## Transport
 
 ```bash
@@ -39,7 +49,7 @@ Official Python wrapper: [examples/enigma_client.py](../examples/enigma_client.p
 
 ## render_asset_set
 
-Source is inspected **once**, then each purpose is rendered using shared inspection data. Returns an aggregate `job_id`, `manifest`, and per-purpose entries in `outputs`.
+The API inspects the source once per `render_asset_set` call and reuses that inspection for recipe resolution and rendering (RenderService does not re-inspect when precomputed inspection is supplied). Returns an aggregate `job_id`, `manifest`, and per-purpose entries in `outputs`.
 
 ```json
 {
@@ -81,13 +91,20 @@ Morphology (elongated, flat, tall, etc.) affects orientation only — not semant
 
 ## asset_id rules
 
-- Optional. When omitted, a collision-resistant default is derived from the source path (`basename__hash`).
+- Optional. When omitted, a collision-resistant default is derived from the **workspace-relative** source path (`basename__hash`), so moving the Enigma checkout does not rename generated files.
 - When provided: non-empty, filename-safe lowercase, max 128 chars, no path separators or traversal.
 - Two different sources must not silently share the same output identity.
+- `force: true` bypasses cache only. It never overrides `ASSET_ID_COLLISION` ownership.
+
+## Human sidecars
+
+Durable `<source>.icon.json` corrections win over agent hints.
+
+If a sidecar exists and cannot be parsed or fails strict field validation, the render **stops** with `OVERRIDE_INVALID`. Invalid human corrections are never silently ignored.
 
 ## Output locations
 
-Under `<workspace_root>/generated/` by purpose category, e.g. `generated/icons/inventory/sword__abc12345.png`. Callers cannot specify arbitrary paths in safe mode.
+Under `<workspace_root>/generated/` by purpose category, e.g. `generated/icons/inventory/sword__abc12345.png`. Callers cannot specify arbitrary paths in safe mode. Review records live at `<workspace_root>/generated/review_queue.json`.
 
 ## Cache semantics
 
@@ -97,13 +114,13 @@ Under `<workspace_root>/generated/` by purpose category, e.g. `generated/icons/i
 2. Manifest identity matches current source hash, dependencies, asset_id, purpose, recipe revision, effective configuration hash, hints, and output SHA-256
 3. Output still passes production quality validation
 
-Changing source, sidecar, hints, preset content, or tool version invalidates the cache. A PNG without a matching manifest is never a cache hit.
+Changing source, sidecar, hints, preset content, or tool version invalidates the cache. A PNG without a matching manifest is never a cache hit. `force` regenerates the same logical asset; it does not steal another source's output path.
 
 ## Manifest semantics
 
-Every terminal successful render writes `generated/manifests/<job_id>.json` including source identity, dependency hashes, recipe, effective override, hints, correction history, quality metrics, output hash, and trace. Cache hits return the same `manifest` field.
+`validated` is returned only when the PNG and matching production manifest were both committed. If the manifest write fails after replacing the PNG, the previous valid artifact is restored (or the unmanifested PNG is removed) and the API returns `WRITE_FAILED`.
 
-Use `explain_result` with `job_id` for deterministic traceability.
+Cache hits return the same `manifest` field. Safe-mode `explain_result` should use `job_id`. A `manifest` path is accepted only if it is inside `<workspace>/generated/manifests/`.
 
 ## Response examples
 
