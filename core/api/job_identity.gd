@@ -60,11 +60,12 @@ static func _gltf_external_dependency_paths(source_path: String) -> Array[String
 static func _append_gltf_uri_dependency(paths: Array[String], base_dir: String, uri: String) -> void:
 	if uri.is_empty() or uri.begins_with("data:"):
 		return
-	var resolved: String = uri
-	if not uri.begins_with("/") and not uri.contains("://"):
-		resolved = IconForgeFileUtil.normalize_path(base_dir.path_join(uri))
+	var decoded_uri: String = uri.uri_file_decode()
+	var resolved: String = decoded_uri
+	if not decoded_uri.begins_with("/") and not decoded_uri.contains("://"):
+		resolved = IconForgeFileUtil.normalize_path(base_dir.path_join(decoded_uri))
 	else:
-		resolved = IconForgeFileUtil.normalize_path(uri)
+		resolved = IconForgeFileUtil.normalize_path(decoded_uri)
 	if not resolved.is_empty() and not paths.has(resolved):
 		paths.append(resolved)
 

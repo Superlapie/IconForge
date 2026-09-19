@@ -68,6 +68,9 @@ func run() -> Dictionary:
 	await _scenario_manifest_rollback_recovery_path_surfaces()
 	await _scenario_recipe_review_persistence_contract()
 	await _scenario_external_gltf_dependency_provenance()
+	await _scenario_encoded_gltf_dependency_provenance()
+	await _scenario_rollback_remove_failure_surfaces()
+	await _scenario_rollback_remove_failure_unit()
 	await _scenario_output_lock_linux_pid_reuse_reaped()
 	await _scenario_aggregate_manifest_write_failure()
 	await _scenario_workspace_exclusive_relative_path()
@@ -1249,6 +1252,113 @@ func _scenario_external_gltf_dependency_provenance() -> void:
 	ApiServiceScript.reset_test_seams()
 	_assert(str(fifth.get("code", "")) == "SOURCE_CHANGED_DURING_RENDER", "external dependency mutation blocks commit")
 	_assert(IconForgeFileUtil.file_hash(output_path) == output_sha, "external dependency mutation preserves committed output")
+
+func _scenario_encoded_gltf_dependency_provenance() -> void:
+	scenarios_run += 1
+	var dep_dir: String = repo_root.path_join("tests/e2e/assets/dependency/encoded")
+	var source_path: String = dep_dir.path_join("encoded.gltf")
+	var bin_path: String = dep_dir.path_join("folder name/external.bin")
+	var texture_path: String = dep_dir.path_join("texture one.png")
+	_assert(FileAccess.file_exists(source_path), "encoded gltf fixture exists")
+	var dependencies: Array = JobIdentity.dependency_hashes(source_path)
+	var dep_text: String = "\n".join(PackedStringArray(dependencies))
+	_assert(dep_text.find(bin_path) >= 0, "encoded gltf tracks decoded bin dependency")
+	_assert(dep_text.find(texture_path) >= 0, "encoded gltf tracks decoded texture dependency")
+	var asset_id: String = "encoded_gltf_dep_%d" % Time.get_ticks_usec()
+	var first: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": source_path,
+		"purpose": "inventory_icon",
+		"asset_id": asset_id,
+		"force": true,
+	})
+	_assert(bool(first.get("success", false)), "encoded gltf first render")
+	var second: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": source_path,
+		"purpose": "inventory_icon",
+		"asset_id": asset_id,
+	})
+	_assert(bool(second.get("cache_hit", false)), "encoded gltf cache hit before dependency mutation")
+	var bin_backup: PackedByteArray = FileAccess.get_file_as_bytes(bin_path)
+	FileAccess.open(bin_path, FileAccess.WRITE).store_buffer(PackedByteArray([1, 2, 3, 4]))
+	var third: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": source_path,
+		"purpose": "inventory_icon",
+		"asset_id": asset_id,
+	})
+	FileAccess.open(bin_path, FileAccess.WRITE).store_buffer(bin_backup)
+	_assert(str(second.get("job_id", "")) != str(third.get("job_id", "")), "encoded bin mutation invalidates cache")
+	_assert(not (bool(third.get("success", false)) and bool(third.get("cache_hit", false))), "encoded bin mutation does not return stale cache hit")
+	var texture_backup: PackedByteArray = FileAccess.get_file_as_bytes(texture_path)
+	FileAccess.open(texture_path, FileAccess.WRITE).store_buffer(PackedByteArray([9, 8, 7, 6]))
+	var fourth: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": source_path,
+		"purpose": "inventory_icon",
+		"asset_id": asset_id,
+	})
+	FileAccess.open(texture_path, FileAccess.WRITE).store_buffer(texture_backup)
+	_assert(str(second.get("job_id", "")) != str(fourth.get("job_id", "")), "encoded texture mutation invalidates cache")
+	_assert(not (bool(fourth.get("success", false)) and bool(fourth.get("cache_hit", false))), "encoded texture mutation does not return stale cache hit")
+	ApiServiceScript.reset_test_seams()
+	ApiServiceScript.test_before_commit_snapshot = func(_mutated_path: String) -> void:
+		FileAccess.open(texture_path, FileAccess.WRITE).store_buffer(PackedByteArray([5, 5, 5, 5]))
+	var output_path: String = str(first["output"]["path"])
+	var output_sha: String = IconForgeFileUtil.file_hash(output_path)
+	var fifth: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": source_path,
+		"purpose": "inventory_icon",
+		"asset_id": asset_id,
+		"force": true,
+	})
+	FileAccess.open(texture_path, FileAccess.WRITE).store_buffer(texture_backup)
+	ApiServiceScript.reset_test_seams()
+	_assert(str(fifth.get("code", "")) == "SOURCE_CHANGED_DURING_RENDER", "encoded dependency mutation blocks commit")
+	_assert(IconForgeFileUtil.file_hash(output_path) == output_sha, "encoded dependency mutation preserves committed output")
+
+func _scenario_rollback_remove_failure_surfaces() -> void:
+	scenarios_run += 1
+	IconForgeFileUtil.reset_test_seams()
+	api.manifest_service.reset_test_seams()
+	api.manifest_service.test_fail_remove_output = true
+	IconForgeFileUtil.test_write_json_atomic_error = ERR_CANT_CREATE
+	var sword: String = repo_root.path_join("fixtures/sword.gltf")
+	var asset_id: String = "rollback_remove_fail_%d" % Time.get_ticks_usec()
+	var result: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": sword,
+		"purpose": "inventory_icon",
+		"asset_id": asset_id,
+		"force": true,
+	})
+	IconForgeFileUtil.reset_test_seams()
+	api.manifest_service.reset_test_seams()
+	_assert(not bool(result.get("success", true)), "rollback remove failure not validated")
+	_assert(str(result.get("code", "")) == "ROLLBACK_FAILED", "rollback remove failure code")
+	_assert(str(result.get("recommended_action", "")) == "manual_recovery_required", "rollback remove failure recommended action")
+
+func _scenario_rollback_remove_failure_unit() -> void:
+	scenarios_run += 1
+	api.manifest_service.reset_test_seams()
+	var output_path: String = repo_root.path_join("out/rollback_remove_unit_%d.png" % Time.get_ticks_usec())
+	IconForgeFileUtil.write_text_atomic(output_path, "uncommitted-output")
+	api.manifest_service.test_fail_remove_output = true
+	var rollback: Dictionary = api.manifest_service._restore_output(output_path, false, "")
+	api.manifest_service.reset_test_seams()
+	_assert(not bool(rollback.get("success", true)), "rollback remove unit failure surfaced")
+	_assert(str(rollback.get("error", {}).get("code", "")) == "ROLLBACK_FAILED", "rollback remove unit code")
+	_assert(FileAccess.file_exists(output_path), "rollback remove unit leaves output when removal fails")
+	if FileAccess.file_exists(output_path):
+		DirAccess.remove_absolute(output_path)
 
 func _scenario_output_lock_linux_pid_reuse_reaped() -> void:
 	if OS.get_name() != "Linux":

@@ -9,6 +9,7 @@ const _Version = preload("res://core/api/icon_forge_version.gd")
 var workspace_root: String = ""
 var test_fail_aggregate_write: bool = false
 var test_fail_restore_output: bool = false
+var test_fail_remove_output: bool = false
 
 func _init(root: String = "") -> void:
 	if root.is_empty():
@@ -31,6 +32,7 @@ func manifest_path_for_job(job_id: String) -> String:
 func reset_test_seams() -> void:
 	test_fail_aggregate_write = false
 	test_fail_restore_output = false
+	test_fail_remove_output = false
 
 func write_manifest(job_id: String, data: Dictionary) -> Dictionary:
 	if test_fail_aggregate_write and str(data.get("operation", "")) == "render_asset_set":
@@ -215,7 +217,26 @@ func _restore_output(output_path: String, had_output: bool, output_backup_path: 
 			}, output_backup_path)
 		return {"success": true}
 	if FileAccess.file_exists(output_path):
-		DirAccess.remove_absolute(output_path)
+		if test_fail_remove_output:
+			return {
+				"success": false,
+				"error": {
+					"code": "ROLLBACK_FAILED",
+					"message": "Could not remove uncommitted output after commit failure.",
+					"path": output_path,
+				},
+			}
+		var remove_error: Error = DirAccess.remove_absolute(output_path)
+		if remove_error != OK or FileAccess.file_exists(output_path):
+			return {
+				"success": false,
+				"error": {
+					"code": "ROLLBACK_FAILED",
+					"message": "Could not remove uncommitted output after commit failure.",
+					"path": output_path,
+					"godot_error": remove_error,
+				},
+			}
 	return {"success": true}
 
 func _attach_recovery_backup(result: Dictionary, output_backup_path: String) -> Dictionary:
