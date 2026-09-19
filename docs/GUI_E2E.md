@@ -2,7 +2,7 @@
 
 > **AI agents** integrate through the [Machine API](MACHINE_API.md), not the GUI. This E2E validates the human-facing drop boundary.
 
-Icon Studio accepts operating-system file drops through the main Godot
+Icon Forge accepts operating-system file drops through the main Godot
 `Window.files_dropped` boundary. The callback normalizes file URIs, filters
 supported sources, deduplicates the source list, selects the first accepted
 asset, inspects it, and schedules the same `RenderService` preview used by
@@ -33,11 +33,11 @@ verifies XDND enter/position/drop, selection transfer, Godot's actual
 and screenshot capture:
 
 ```bash
-python3 -m pip install --target /tmp/iconstudio-python-xlib python-xlib
-ICONSTUDIO_PYTHON_PATH=/tmp/iconstudio-python-xlib ./scripts/gui-native-dnd-e2e
+python3 -m pip install --target /tmp/iconforge-python-xlib python-xlib
+ICONFORGE_PYTHON_PATH=/tmp/iconforge-python-xlib ./scripts/gui-native-dnd-e2e
 ```
 
-`python-xlib` is test-harness tooling only; it is not an Icon Studio runtime
+`python-xlib` is test-harness tooling only; it is not an Icon Forge runtime
 dependency. The proof output is written to `out/gui-native-dnd-e2e/`.
 
 The native test deliberately drops a copied model outside the Godot project.

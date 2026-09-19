@@ -1,21 +1,21 @@
 extends RefCounted
 class_name CacheService
 
-const _Version = preload("res://core/api/icon_studio_version.gd")
-const INDEX_PATH: String = "user://iconstudio/cache.json"
+const _Version = preload("res://core/api/icon_forge_version.gd")
+const INDEX_PATH: String = "user://iconforge/cache.json"
 
 var _entries: Dictionary = {}
 
 func _init() -> void:
-	_entries = IconStudioFileUtil.read_json(INDEX_PATH)
+	_entries = IconForgeFileUtil.read_json(INDEX_PATH)
 
 func build_key(source_path: String, preset: PresetDefinition, override: Dictionary) -> String:
-	var source_hash: String = IconStudioFileUtil.file_hash(source_path)
+	var source_hash: String = IconForgeFileUtil.file_hash(source_path)
 	var dependency_hashes: Array[String] = []
 	for dependency in ResourceLoader.get_dependencies(source_path):
 		var dependency_path: String = str(dependency).get_slice("::", 0)
 		if FileAccess.file_exists(dependency_path):
-			dependency_hashes.append("%s=%s" % [dependency_path, IconStudioFileUtil.file_hash(dependency_path)])
+			dependency_hashes.append("%s=%s" % [dependency_path, IconForgeFileUtil.file_hash(dependency_path)])
 	dependency_hashes.sort()
 	var payload: String = "%s\n%s\n%s\n%s\n%s" % [source_hash, "\n".join(dependency_hashes), preset.to_canonical_json(), JSON.stringify(override), _Version.VERSION]
 	return payload.sha256_text()
@@ -37,8 +37,8 @@ func store(key: String, source_path: String, output_path: String, preset_id: Str
 		"metrics": metrics,
 		"stored_at": Time.get_datetime_string_from_system(true)
 	}
-	IconStudioFileUtil.write_json_atomic(INDEX_PATH, _entries)
+	IconForgeFileUtil.write_json_atomic(INDEX_PATH, _entries)
 
 func clear() -> void:
 	_entries.clear()
-	IconStudioFileUtil.write_json_atomic(INDEX_PATH, _entries)
+	IconForgeFileUtil.write_json_atomic(INDEX_PATH, _entries)

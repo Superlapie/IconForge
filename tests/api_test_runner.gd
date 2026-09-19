@@ -59,7 +59,7 @@ func run() -> Dictionary:
 	await _scenario_manifest_lookup_prefers_matching_sha()
 	await _scenario_validate_output_provenance()
 	await _scenario_opaque_validation_requires_metadata()
-	IconStudioFileUtil.reset_test_seams()
+	IconForgeFileUtil.reset_test_seams()
 	api.manifest_service.reset_test_seams()
 	AssetInspector.reset_inspect_count()
 	return {
@@ -345,7 +345,7 @@ func _scenario_sidecar_precedence() -> void:
 	var sword: String = temp_dir.path_join("sword.gltf")
 	DirAccess.copy_absolute(repo_root.path_join("fixtures/sword.gltf"), sword)
 	var sidecar_path: String = overrides.sidecar_path(sword)
-	IconStudioFileUtil.write_json_atomic(sidecar_path, {"yaw": 33, "occupancy": 0.77})
+	IconForgeFileUtil.write_json_atomic(sidecar_path, {"yaw": 33, "occupancy": 0.77})
 	var with_hint: Dictionary = await api.execute({
 		"schema_version": 1,
 		"operation": "render_asset",
@@ -363,7 +363,7 @@ func _scenario_invalid_sidecar_fails_closed() -> void:
 	var sword: String = temp_dir.path_join("sword.gltf")
 	DirAccess.copy_absolute(repo_root.path_join("fixtures/sword.gltf"), sword)
 	var sidecar_path: String = overrides.sidecar_path(sword)
-	IconStudioFileUtil.write_text_atomic(sidecar_path, "{not json")
+	IconForgeFileUtil.write_text_atomic(sidecar_path, "{not json")
 	var result: Dictionary = await api.execute({
 		"schema_version": 1,
 		"operation": "render_asset",
@@ -381,7 +381,7 @@ func _scenario_sidecar_typo_rejected() -> void:
 	var sword: String = temp_dir.path_join("sword.gltf")
 	DirAccess.copy_absolute(repo_root.path_join("fixtures/sword.gltf"), sword)
 	var sidecar_path: String = overrides.sidecar_path(sword)
-	IconStudioFileUtil.write_json_atomic(sidecar_path, {"ocupancy": 0.8})
+	IconForgeFileUtil.write_json_atomic(sidecar_path, {"ocupancy": 0.8})
 	var result: Dictionary = await api.execute({
 		"schema_version": 1,
 		"operation": "render_asset",
@@ -408,7 +408,7 @@ func _scenario_sidecar_lighting_strictness() -> void:
 	})
 	_assert(bool(first.get("success", false)), "sidecar lighting baseline renders")
 	var output_path: String = str(first.get("output", {}).get("path", ""))
-	IconStudioFileUtil.write_json_atomic(sidecar_path, {
+	IconForgeFileUtil.write_json_atomic(sidecar_path, {
 		"lighting": {
 			"rig": "neutral_studio",
 			"ambient_energy": 0.5,
@@ -423,8 +423,8 @@ func _scenario_sidecar_lighting_strictness() -> void:
 		"force": true,
 	})
 	_assert(bool(valid_light.get("success", false)) or str(valid_light.get("status", "")) == "needs_review", "valid lighting sidecar accepted")
-	var preserved_hash: String = IconStudioFileUtil.file_hash(output_path)
-	IconStudioFileUtil.write_json_atomic(sidecar_path, {"lighting": {"kee": {"angle": [-30.0, 45.0, 0.0]}}})
+	var preserved_hash: String = IconForgeFileUtil.file_hash(output_path)
+	IconForgeFileUtil.write_json_atomic(sidecar_path, {"lighting": {"kee": {"angle": [-30.0, 45.0, 0.0]}}})
 	var misspelled: Dictionary = await api.execute({
 		"schema_version": 1,
 		"operation": "render_asset",
@@ -433,8 +433,8 @@ func _scenario_sidecar_lighting_strictness() -> void:
 		"force": true,
 	})
 	_assert_override_invalid(misspelled, "misspelled lighting field")
-	_assert(IconStudioFileUtil.file_hash(output_path) == preserved_hash, "misspelled lighting preserves output")
-	IconStudioFileUtil.write_json_atomic(sidecar_path, {"lighting": {"key": {"angle": [-30.0, 45.0, 0.0], "energy": 1.2}}})
+	_assert(IconForgeFileUtil.file_hash(output_path) == preserved_hash, "misspelled lighting preserves output")
+	IconForgeFileUtil.write_json_atomic(sidecar_path, {"lighting": {"key": {"angle": [-30.0, 45.0, 0.0], "energy": 1.2}}})
 	var unknown_nested: Dictionary = await api.execute({
 		"schema_version": 1,
 		"operation": "render_asset",
@@ -443,7 +443,7 @@ func _scenario_sidecar_lighting_strictness() -> void:
 		"force": true,
 	})
 	_assert_override_invalid(unknown_nested, "unknown nested lighting field")
-	IconStudioFileUtil.write_json_atomic(sidecar_path, {"composition": {"bogus": 1}})
+	IconForgeFileUtil.write_json_atomic(sidecar_path, {"composition": {"bogus": 1}})
 	var unknown_object: Dictionary = await api.execute({
 		"schema_version": 1,
 		"operation": "render_asset",
@@ -452,7 +452,7 @@ func _scenario_sidecar_lighting_strictness() -> void:
 		"force": true,
 	})
 	_assert_override_invalid(unknown_object, "unknown nested object field")
-	IconStudioFileUtil.write_json_atomic(sidecar_path, {"lighting": {"key": {"angle": [0.0, "bad", 0.0]}}})
+	IconForgeFileUtil.write_json_atomic(sidecar_path, {"lighting": {"key": {"angle": [0.0, "bad", 0.0]}}})
 	var malformed: Dictionary = await api.execute({
 		"schema_version": 1,
 		"operation": "render_asset",
@@ -462,7 +462,7 @@ func _scenario_sidecar_lighting_strictness() -> void:
 	})
 	_assert_override_invalid(malformed, "malformed lighting value")
 	_assert(FileAccess.file_exists(output_path), "invalid lighting sidecar does not delete output")
-	_assert(IconStudioFileUtil.file_hash(output_path) == preserved_hash, "invalid lighting sidecar leaves prior artifact")
+	_assert(IconForgeFileUtil.file_hash(output_path) == preserved_hash, "invalid lighting sidecar leaves prior artifact")
 
 func _assert_override_invalid(result: Dictionary, label: String) -> void:
 	_assert(not bool(result.get("success", true)), "%s blocks render" % label)
@@ -574,8 +574,8 @@ func _scenario_safe_replace_preserves_on_failure() -> void:
 	scenarios_run += 1
 	var dest: String = repo_root.path_join("out/safe_replace_dest.txt")
 	var original: String = "original-content"
-	IconStudioFileUtil.write_text_atomic(dest, original)
-	var error: Error = IconStudioFileUtil.safe_replace_file(repo_root.path_join("out/missing-temp.txt"), dest)
+	IconForgeFileUtil.write_text_atomic(dest, original)
+	var error: Error = IconForgeFileUtil.safe_replace_file(repo_root.path_join("out/missing-temp.txt"), dest)
 	_assert(error != OK, "safe_replace missing temp fails")
 	_assert(FileAccess.get_file_as_string(dest) == original, "safe_replace preserves destination on failure")
 
@@ -650,14 +650,14 @@ func _scenario_source_mutation_invalidates_cache() -> void:
 	_assert(bool(third.get("success", false)), "source mutation rerender succeeds")
 	_assert(not bool(third.get("cache_hit", true)), "source mutation invalidates cache")
 	if bool(third.get("success", false)):
-		var first_manifest: Dictionary = IconStudioFileUtil.read_json(str(first.get("manifest", "")))
-		var third_manifest: Dictionary = IconStudioFileUtil.read_json(str(third.get("manifest", "")))
+		var first_manifest: Dictionary = IconForgeFileUtil.read_json(str(first.get("manifest", "")))
+		var third_manifest: Dictionary = IconForgeFileUtil.read_json(str(third.get("manifest", "")))
 		_assert(str(first_manifest.get("source_hash", "")) != str(third_manifest.get("source_hash", "")), "source mutation changes source hash")
 
 func _scenario_manifest_commit_failure_blocks_validated() -> void:
 	scenarios_run += 1
-	IconStudioFileUtil.reset_test_seams()
-	IconStudioFileUtil.test_write_json_atomic_error = ERR_CANT_CREATE
+	IconForgeFileUtil.reset_test_seams()
+	IconForgeFileUtil.test_write_json_atomic_error = ERR_CANT_CREATE
 	var sword: String = repo_root.path_join("fixtures/sword.gltf")
 	var result: Dictionary = await api.execute({
 		"schema_version": 1,
@@ -668,21 +668,21 @@ func _scenario_manifest_commit_failure_blocks_validated() -> void:
 		"hints": {"asset_class": "generic"},
 		"force": true,
 	})
-	IconStudioFileUtil.reset_test_seams()
+	IconForgeFileUtil.reset_test_seams()
 	_assert(not bool(result.get("success", true)), "manifest failure not validated")
 	_assert(str(result.get("code", "")) == "WRITE_FAILED", "manifest failure code")
 
 func _scenario_replace_failure_preserves_destination() -> void:
 	scenarios_run += 1
-	IconStudioFileUtil.reset_test_seams()
+	IconForgeFileUtil.reset_test_seams()
 	var dest: String = repo_root.path_join("out/replace_failure_dest.txt")
 	var temp: String = repo_root.path_join("out/replace_failure_temp.txt")
 	var original: String = "keep-me"
-	IconStudioFileUtil.write_text_atomic(dest, original)
-	IconStudioFileUtil.write_text_atomic(temp, "replacement")
-	IconStudioFileUtil.test_fail_replace_after_backup = true
-	var error: Error = IconStudioFileUtil.safe_replace_file(temp, dest)
-	IconStudioFileUtil.reset_test_seams()
+	IconForgeFileUtil.write_text_atomic(dest, original)
+	IconForgeFileUtil.write_text_atomic(temp, "replacement")
+	IconForgeFileUtil.test_fail_replace_after_backup = true
+	var error: Error = IconForgeFileUtil.safe_replace_file(temp, dest)
+	IconForgeFileUtil.reset_test_seams()
 	_assert(error != OK, "injected replace failure returns error")
 	_assert(FileAccess.get_file_as_string(dest) == original, "injected replace failure preserves destination")
 
@@ -902,7 +902,7 @@ func _scenario_sidecar_value_validation() -> void:
 	DirAccess.make_dir_recursive_absolute(temp_dir)
 	var sword: String = temp_dir.path_join("value.gltf")
 	DirAccess.copy_absolute(repo_root.path_join("fixtures/sword.gltf"), sword)
-	IconStudioFileUtil.write_json_atomic(overrides.sidecar_path(sword), {"camera": {"fov": "banana"}})
+	IconForgeFileUtil.write_json_atomic(overrides.sidecar_path(sword), {"camera": {"fov": "banana"}})
 	var result: Dictionary = await api.execute({
 		"schema_version": 1,
 		"operation": "render_asset",
@@ -963,7 +963,7 @@ func _scenario_manifest_lookup_prefers_matching_sha() -> void:
 	var output_path: String = str(render["output"]["path"])
 	var current_hash: String = str(render["output"]["sha256"])
 	var decoy_path: String = api.manifest_service.manifests_dir().path_join("0000-decoy.json")
-	IconStudioFileUtil.write_json_atomic(decoy_path, {
+	IconForgeFileUtil.write_json_atomic(decoy_path, {
 		"job_id": "0000-decoy",
 		"generated_at": "9999-01-01T00:00:00Z",
 		"output": {"path": output_path, "sha256": "deadbeef"},

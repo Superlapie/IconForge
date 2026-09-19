@@ -20,7 +20,7 @@ func _ready() -> void:
 	var spacer_top: Control = Control.new()
 	spacer_top.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	column.add_child(spacer_top)
-	var title: Label = UiStyles.heading("Icon Studio", 17)
+	var title: Label = UiStyles.heading("Icon Forge", 17)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(title)
 	var tagline: Label = UiStyles.label("Turn assets into game-ready imagery.", 13, UiStyles.MUTED)
@@ -95,6 +95,6 @@ func _has_supported_files(data: Variant) -> bool:
 		var path: String = str(raw_path)
 		if path.begins_with("file://"):
 			path = path.trim_prefix("file://").uri_decode()
-		if FileAccess.file_exists(path) and IconStudioFileUtil.is_supported_source(path):
+		if FileAccess.file_exists(path) and IconForgeFileUtil.is_supported_source(path):
 			return true
 	return false

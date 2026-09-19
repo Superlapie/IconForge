@@ -27,5 +27,5 @@ jobs:
 
       - name: Run quality gate
         env:
-          ICONSTUDIO_GODOT: ${{ github.workspace }}/.tools/godot/Godot_v4.7.2-stable_linux.x86_64
+          ICONFORGE_GODOT: ${{ github.workspace }}/.tools/godot/Godot_v4.7.2-stable_linux.x86_64
         run: ./scripts/quality-gate

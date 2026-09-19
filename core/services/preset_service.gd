@@ -2,7 +2,7 @@ extends RefCounted
 class_name PresetService
 
 const BUILTIN_DIR: String = "res://presets"
-const USER_DIR: String = "user://iconstudio/presets"
+const USER_DIR: String = "user://iconforge/presets"
 
 var _presets: Dictionary = {}
 var _paths: Dictionary = {}
@@ -23,7 +23,7 @@ func _load_directory(directory_path: String) -> void:
 	while not filename.is_empty():
 		if not dir.current_is_dir() and filename.get_extension().to_lower() == "json":
 			var path: String = directory_path.path_join(filename)
-			var raw: Dictionary = IconStudioFileUtil.read_json(path)
+			var raw: Dictionary = IconForgeFileUtil.read_json(path)
 			if not raw.is_empty():
 				var preset: PresetDefinition = PresetDefinition.new(raw, path)
 				if preset.validate().is_empty():
@@ -69,7 +69,7 @@ func save_preset(preset: PresetDefinition, destination: String = "") -> Dictiona
 	var validation: Array = preset.validate()
 	if not validation.is_empty():
 		return {"success": false, "error": {"code": "PRESET_VALIDATION_FAILED", "message": "Preset validation failed.", "details": validation}}
-	var error: Error = IconStudioFileUtil.write_text_atomic(path, preset.to_canonical_json())
+	var error: Error = IconForgeFileUtil.write_text_atomic(path, preset.to_canonical_json())
 	if error != OK:
 		return {"success": false, "error": {"code": "PRESET_WRITE_FAILED", "message": "Could not write preset.", "path": path, "godot_error": error}}
 	_presets[preset.get_id()] = preset
@@ -102,7 +102,7 @@ func explain(preset_id: String) -> Dictionary:
 static func schema() -> Dictionary:
 	return {
 		"schema_version": 1,
-		"description": "Icon Studio canonical render preset schema.",
+		"description": "Icon Forge canonical render preset schema.",
 		"fields": {
 			"schema_version": {"type": "integer", "required": true, "enum": [1], "description": "Schema version."},
 			"id": {"type": "string", "required": true, "pattern": "^[a-z0-9][a-z0-9_-]*$", "description": "Stable filename-safe preset id."},

@@ -14,7 +14,7 @@ const _ReviewQueue = preload("res://core/api/review_queue.gd")
 const _ErrorCodes = preload("res://core/api/error_codes.gd")
 const _JobIdentity = preload("res://core/api/job_identity.gd")
 const _Mapper = preload("res://core/api/error_mapper.gd")
-const _Version = preload("res://core/api/icon_studio_version.gd")
+const _Version = preload("res://core/api/icon_forge_version.gd")
 const _OutputLock = preload("res://core/api/output_lock.gd")
 
 ## Canonical machine API dispatcher. All safe-mode operations enter here.
@@ -88,7 +88,7 @@ func _inspect_asset(request: Dictionary) -> Dictionary:
 		var err: Dictionary = inspection.get("error", {})
 		return _Response.failure("inspect_asset", _mapped_code(err), str(err.get("message", "Inspection failed.")))
 	inspection["asset_id"] = str(asset_result.get("asset_id", ""))
-	inspection["source_hash"] = IconStudioFileUtil.file_hash(asset_result["path"])
+	inspection["source_hash"] = IconForgeFileUtil.file_hash(asset_result["path"])
 	inspection["source_identity"] = str(asset_result.get("source_identity", ""))
 	inspection["renderable"] = true
 	inspection["morphology"] = recipe_resolver.classify_morphology(inspection)
@@ -120,7 +120,7 @@ func _render_asset_pipeline(request: Dictionary, safe_mode: bool, shared_context
 	if inspection.is_empty():
 		inspection = inspector.inspect(source_path)
 	state = RenderState.INSPECTED
-	var source_hash: String = str(shared_context.get("source_hash", IconStudioFileUtil.file_hash(source_path)))
+	var source_hash: String = str(shared_context.get("source_hash", IconForgeFileUtil.file_hash(source_path)))
 	var dependency_hashes: Array = shared_context.get("dependency_hashes", _JobIdentity.dependency_hashes(source_path))
 	trace.append(_state_entry(state, {"source_hash": source_hash}))
 	if not bool(inspection.get("success", false)):
@@ -162,7 +162,7 @@ func _render_asset_pipeline(request: Dictionary, safe_mode: bool, shared_context
 	if not bool(output_result.get("success", false)):
 		return _terminal_failure("render_asset", output_result["error"], trace, job_id)
 	var output_path: String = output_result["path"]
-	IconStudioFileUtil.ensure_directory(output_path)
+	IconForgeFileUtil.ensure_directory(output_path)
 
 	var output_lock: RefCounted = _OutputLock.new()
 	var lock_result: Dictionary = output_lock.acquire(output_path)
@@ -251,7 +251,7 @@ func _render_asset_set(request: Dictionary, safe_mode: bool) -> Dictionary:
 
 	var shared_context: Dictionary = {
 		"inspection": inspection,
-		"source_hash": IconStudioFileUtil.file_hash(source_path),
+		"source_hash": IconForgeFileUtil.file_hash(source_path),
 		"dependency_hashes": _JobIdentity.dependency_hashes(source_path),
 	}
 
@@ -371,8 +371,8 @@ func _validate_output_operation(request: Dictionary) -> Dictionary:
 	if not FileAccess.file_exists(output_path):
 		output_path = ProjectSettings.globalize_path(output_path) if output_path.begins_with("res://") else output_path
 
-	var output_sha256: String = IconStudioFileUtil.file_hash(output_path) if FileAccess.file_exists(output_path) else ""
-	var source_hash: String = IconStudioFileUtil.file_hash(str(asset_result["path"]))
+	var output_sha256: String = IconForgeFileUtil.file_hash(output_path) if FileAccess.file_exists(output_path) else ""
+	var source_hash: String = IconForgeFileUtil.file_hash(str(asset_result["path"]))
 	var source_identity: String = str(asset_result.get("source_identity", ""))
 	var frame_metrics: Dictionary = {}
 	var production_manifest: Dictionary = manifest_service.find_manifest_by_output_path(output_path)
@@ -470,7 +470,7 @@ func _try_cache_hit(output_path: String, purpose_def: Dictionary, preset: Preset
 	var manifest: Dictionary = manifest_service.find_manifest_by_job_id(job_id)
 	if manifest.is_empty():
 		return {}
-	var output_sha256: String = IconStudioFileUtil.file_hash(output_path)
+	var output_sha256: String = IconForgeFileUtil.file_hash(output_path)
 	if not manifest_service.manifest_matches_identity(manifest, {
 		"source_hash": source_hash,
 		"source_identity": source_identity,
@@ -501,7 +501,7 @@ func _check_output_collision(output_path: String, source_path: String) -> Dictio
 	return {}
 
 func _normalize_source_path(path: String) -> String:
-	return IconStudioFileUtil.normalize_path(path)
+	return IconForgeFileUtil.normalize_path(path)
 
 func _success_render(job_id: String, asset_id: String, purpose_id: String, output_path: String, output_sha256: String, preset: PresetDefinition, preset_id: String, preset_revision: int, quality: Dictionary, render_result: Dictionary, correction_actions: Array, manifest_path: String, trace: Array, cache_hit: bool) -> Dictionary:
 	return _Response.success("render_asset", {

@@ -1,5 +1,5 @@
 extends Control
-class_name StudioUi
+class_name ForgeUi
 
 const UiStylesScript = preload("res://app/ui/ui_styles.gd")
 const AccordionSectionScript = preload("res://app/ui/accordion_section.gd")
@@ -33,7 +33,7 @@ const PreviewCameraScript = preload("res://core/services/preview_camera.gd")
 const GuiSessionScript = preload("res://app/ui/gui_session.gd")
 const CliRecipeScript = preload("res://app/ui/cli_recipe.gd")
 
-const RECENT_PATH: String = "user://iconstudio/recent_sources.json"
+const RECENT_PATH: String = "user://iconforge/recent_sources.json"
 const PREVIEW_DEBOUNCE_MS: int = 120
 const INTERACTION_DEBOUNCE_MS: int = 100
 const COMPARE_PRESETS: Array[String] = ["inventory_item", "weapon", "shop_thumbnail", "equipment_preview"]
@@ -98,7 +98,7 @@ var sources: Array[String] = []
 var active_source: String = ""
 var active_preset: PresetDefinition
 var active_override: Dictionary = {}
-var preview_path: String = "user://iconstudio/previews/current.png"
+var preview_path: String = "user://iconforge/previews/current.png"
 var export_format: String = "png"
 var export_destination: String = "res://out"
 var preview_quality: String = "full"
@@ -124,7 +124,7 @@ var _pending_export_settings: Dictionary = {}
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_to_group("iconstudio_gui")
+	add_to_group("iconforge_gui")
 	var window: Window = get_window()
 	if not window.files_dropped.is_connected(_on_files_dropped):
 		window.files_dropped.connect(_on_files_dropped)
@@ -216,7 +216,7 @@ func _build_toolbar() -> Control:
 	var row: HBoxContainer = HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	margin.add_child(row)
-	row.add_child(UiStylesScript.heading("Icon Studio", 15))
+	row.add_child(UiStylesScript.heading("Icon Forge", 15))
 	row.add_child(_vsep())
 	undo_button = Button.new()
 	undo_button.text = UiIconsScript.label("undo")
@@ -527,20 +527,20 @@ func _load_fixture_sources() -> void:
 			empty_workspace.hide()
 
 func _load_recent_files() -> void:
-	var recent_data: Dictionary = IconStudioFileUtil.read_json(RECENT_PATH)
+	var recent_data: Dictionary = IconForgeFileUtil.read_json(RECENT_PATH)
 	var recent: Array = recent_data.get("paths", [])
 	if empty_workspace != null:
 		empty_workspace.set_recent_files(recent)
 
 func _remember_recent(path: String) -> void:
-	var recent_data: Dictionary = IconStudioFileUtil.read_json(RECENT_PATH)
+	var recent_data: Dictionary = IconForgeFileUtil.read_json(RECENT_PATH)
 	var recent: Array = recent_data.get("paths", [])
 	var normalized: String = _normalize_source_path(path)
 	recent.erase(normalized)
 	recent.insert(0, normalized)
 	if recent.size() > 8:
 		recent.resize(8)
-	IconStudioFileUtil.write_json_atomic(RECENT_PATH, {"paths": recent})
+	IconForgeFileUtil.write_json_atomic(RECENT_PATH, {"paths": recent})
 	if empty_workspace != null:
 		empty_workspace.set_recent_files(recent)
 
@@ -557,11 +557,11 @@ func _normalize_source_path(raw_path: String) -> String:
 		path = ProjectSettings.globalize_path(path)
 	elif not path.is_absolute_path():
 		path = ProjectSettings.globalize_path(path)
-	return IconStudioFileUtil.normalize_path(path)
+	return IconForgeFileUtil.normalize_path(path)
 
 func _add_source(path: String) -> bool:
 	var normalized_path: String = _normalize_source_path(path)
-	if not FileAccess.file_exists(normalized_path) or not IconStudioFileUtil.is_supported_source(normalized_path) or sources.has(normalized_path):
+	if not FileAccess.file_exists(normalized_path) or not IconForgeFileUtil.is_supported_source(normalized_path) or sources.has(normalized_path):
 		return false
 	sources.append(normalized_path)
 	source_browser.add_source(normalized_path)
@@ -576,7 +576,7 @@ func handle_dropped_files(files: PackedStringArray) -> Dictionary:
 	var duplicates: Array[String] = []
 	for raw_path in files:
 		var normalized_path: String = _normalize_source_path(str(raw_path))
-		if not FileAccess.file_exists(normalized_path) or not IconStudioFileUtil.is_supported_source(normalized_path):
+		if not FileAccess.file_exists(normalized_path) or not IconForgeFileUtil.is_supported_source(normalized_path):
 			rejected.append(str(raw_path))
 		elif sources.has(normalized_path):
 			duplicates.append(normalized_path)
@@ -1110,7 +1110,7 @@ func _run_preset_compare() -> void:
 		var preset: PresetDefinition = preset_service.get_preset(preset_id)
 		if preset == null:
 			continue
-		var temp_path: String = "user://iconstudio/previews/compare_%s.png" % preset_id
+		var temp_path: String = "user://iconforge/previews/compare_%s.png" % preset_id
 		var result: Dictionary = await render_service.render(active_source, preset, active_override, temp_path, true)
 		results.append({
 			"preset": preset_id,
@@ -1124,7 +1124,7 @@ func _run_batch_render() -> void:
 	if sources.is_empty() or active_preset == null:
 		return
 	var output_dir: String = ProjectSettings.globalize_path(export_destination)
-	IconStudioFileUtil.ensure_directory(output_dir)
+	IconForgeFileUtil.ensure_directory(output_dir)
 	batch_panel.set_sources(sources, active_preset.get_display_name())
 	var result: Dictionary = await batch_service.render_sources(sources, active_preset, output_dir, {
 		"force": true,
@@ -1292,7 +1292,7 @@ func run_drop_e2e(source_path: String, screenshot_path: String = "") -> Dictiona
 		image_valid = image.load(preview_path) == OK and image.get_size() == Vector2i(256, 256)
 	var screenshot_error: Error = OK
 	if not screenshot_path.is_empty():
-		IconStudioFileUtil.ensure_directory(screenshot_path)
+		IconForgeFileUtil.ensure_directory(screenshot_path)
 		screenshot_error = get_viewport().get_texture().get_image().save_png(screenshot_path)
 	last_drop_result = {}
 	get_window().files_dropped.emit(PackedStringArray([normalized_source, normalized_source + ".unsupported"]))
@@ -1334,7 +1334,7 @@ func run_native_drop_wait(expected_source_path: String, screenshot_path: String 
 		image_valid = image.load(preview_path) == OK and image.get_size() == Vector2i(256, 256)
 	var screenshot_error: Error = OK
 	if not screenshot_path.is_empty():
-		IconStudioFileUtil.ensure_directory(screenshot_path)
+		IconForgeFileUtil.ensure_directory(screenshot_path)
 		screenshot_error = get_viewport().get_texture().get_image().save_png(screenshot_path)
 	var accepted: Array = drop_result.get("accepted", [])
 	return {
@@ -1366,8 +1366,8 @@ func _export_current() -> void:
 	var overwrite: bool = true if settings.is_empty() else bool(settings.get("overwrite", false))
 	var export_override: Dictionary = build_export_override(active_override, settings if not settings.is_empty() else _export_defaults())
 	var output_dir: String = ProjectSettings.globalize_path(export_destination)
-	IconStudioFileUtil.ensure_directory(output_dir)
-	var output_path: String = output_dir.path_join("%s_%s.%s" % [IconStudioFileUtil.source_name(active_source), active_preset.get_id(), export_format])
+	IconForgeFileUtil.ensure_directory(output_dir)
+	var output_path: String = output_dir.path_join("%s_%s.%s" % [IconForgeFileUtil.source_name(active_source), active_preset.get_id(), export_format])
 	if not overwrite and FileAccess.file_exists(output_path):
 		_set_status("Export skipped — output exists.")
 		return
@@ -1405,7 +1405,7 @@ func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
 	if data is Dictionary and data.has("files"):
 		for raw_path in data["files"]:
 			var path: String = _normalize_source_path(str(raw_path))
-			if FileAccess.file_exists(path) and IconStudioFileUtil.is_supported_source(path):
+			if FileAccess.file_exists(path) and IconForgeFileUtil.is_supported_source(path):
 				return true
 	return false
 

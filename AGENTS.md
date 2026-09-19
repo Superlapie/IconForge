@@ -1,4 +1,4 @@
-# Icon Studio agent guide
+# Icon Forge agent guide
 
 ## Personas
 
@@ -13,7 +13,7 @@
 
 Transport: `api --request FILE --json` (or the official [examples/enigma_client.py](examples/enigma_client.py) wrapper).
 
-Workspace: set `ICONSTUDIO_WORKSPACE_ROOT` or pass `--workspace-root` so generated artifacts land in the caller project (not only this repository). Relative asset paths are workspace-exclusive; use `res://` only for intentional tool-repository resources.
+Workspace: set `ICONFORGE_WORKSPACE_ROOT` or pass `--workspace-root` so generated artifacts land in the caller project (not only this repository). Relative asset paths are workspace-exclusive; use `res://` only for intentional tool-repository resources.
 
 ### B. Repository maintainer (humans and authorized debug tooling)
 
@@ -36,9 +36,9 @@ After every `render_asset` or `render_asset_set` response:
 
 ## What this tool does
 
-Icon Studio converts GLB/glTF models and static images into consistent PNG game imagery. You specify **semantic intent** (`purpose`); Icon Studio owns inspection, recipe resolution, rendering, bounded correction, validation, and commit.
+Icon Forge converts GLB/glTF models and static images into consistent PNG game imagery. You specify **semantic intent** (`purpose`); Icon Forge owns inspection, recipe resolution, rendering, bounded correction, validation, and commit.
 
-**Philosophy:** Agents specify intent. Icon Studio owns rendering.
+**Philosophy:** Agents specify intent. Icon Forge owns rendering.
 
 ## Expected machine workflow
 

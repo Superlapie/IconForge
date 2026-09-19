@@ -2,7 +2,7 @@ extends RefCounted
 class_name ManifestService
 
 const _Schema = preload("res://core/api/api_schema.gd")
-const _Version = preload("res://core/api/icon_studio_version.gd")
+const _Version = preload("res://core/api/icon_forge_version.gd")
 
 ## First-class production manifests for audit and reproducibility.
 
@@ -13,7 +13,7 @@ func _init(root: String = "") -> void:
 	if root.is_empty():
 		workspace_root = ProjectSettings.globalize_path("res://")
 	else:
-		workspace_root = IconStudioFileUtil.normalize_path(root)
+		workspace_root = IconForgeFileUtil.normalize_path(root)
 
 func manifests_dir() -> String:
 	return workspace_root.path_join("generated/manifests")
@@ -42,7 +42,7 @@ func write_manifest(job_id: String, data: Dictionary) -> Dictionary:
 	for key in data.keys():
 		manifest[key] = data[key]
 	var path: String = manifest_path_for_job(job_id)
-	var write_error: Error = IconStudioFileUtil.write_json_atomic(path, manifest)
+	var write_error: Error = IconForgeFileUtil.write_json_atomic(path, manifest)
 	if write_error != OK:
 		return {"success": false, "path": path, "error": {"code": "WRITE_FAILED", "message": "Could not write production manifest.", "godot_error": write_error}}
 	var read_back: Dictionary = read_manifest(path)
@@ -59,12 +59,12 @@ func commit_validated_render(output_temp_path: String, output_path: String, job_
 		if backup_error != OK:
 			return {"success": false, "error": {"code": "WRITE_FAILED", "message": "Could not back up existing output before commit."}}
 
-	var output_error: Error = IconStudioFileUtil.safe_replace_file(output_temp_path, output_path)
+	var output_error: Error = IconForgeFileUtil.safe_replace_file(output_temp_path, output_path)
 	if output_error != OK:
 		_cleanup_temp(output_temp_path)
 		return {"success": false, "error": {"code": "WRITE_FAILED", "message": "Could not commit validated output."}}
 
-	var output_sha256: String = IconStudioFileUtil.file_hash(output_path)
+	var output_sha256: String = IconForgeFileUtil.file_hash(output_path)
 	var manifest_payload: Dictionary = data.duplicate(true)
 	manifest_payload["output"] = manifest_payload.get("output", {})
 	manifest_payload["output"]["path"] = output_path
@@ -93,7 +93,7 @@ func commit_validated_render(output_temp_path: String, output_path: String, job_
 		"asset_id": str(stored.get("asset_id", data.get("asset_id", ""))),
 		"updated_at": Time.get_datetime_string_from_system(true),
 	}
-	var owner_error: Error = IconStudioFileUtil.write_json_atomic(ownership_path(output_path), ownership)
+	var owner_error: Error = IconForgeFileUtil.write_json_atomic(ownership_path(output_path), ownership)
 	if owner_error != OK:
 		_restore_output(output_path, had_output, output_backup_path)
 		if FileAccess.file_exists(manifest_path_for_job(job_id)):
@@ -109,13 +109,13 @@ func read_ownership(output_path: String) -> Dictionary:
 	var path: String = ownership_path(output_path)
 	if not FileAccess.file_exists(path):
 		return {}
-	var ownership: Dictionary = IconStudioFileUtil.read_json(path)
+	var ownership: Dictionary = IconForgeFileUtil.read_json(path)
 	if ownership.is_empty() or str(ownership.get("source", "")).is_empty():
 		return {"corrupt": true, "path": path}
 	return ownership
 
 func read_manifest(path: String) -> Dictionary:
-	return IconStudioFileUtil.read_json(path)
+	return IconForgeFileUtil.read_json(path)
 
 func find_manifest_by_job_id(job_id: String) -> Dictionary:
 	var path: String = manifest_path_for_job(job_id)
@@ -124,7 +124,7 @@ func find_manifest_by_job_id(job_id: String) -> Dictionary:
 	return {}
 
 func find_manifest_by_output_path(output_path: String) -> Dictionary:
-	var current_hash: String = IconStudioFileUtil.file_hash(output_path) if FileAccess.file_exists(output_path) else ""
+	var current_hash: String = IconForgeFileUtil.file_hash(output_path) if FileAccess.file_exists(output_path) else ""
 	var ownership: Dictionary = read_ownership(output_path)
 	if not ownership.is_empty() and not bool(ownership.get("corrupt", false)):
 		var owned_manifest: Dictionary = find_manifest_by_job_id(str(ownership.get("job_id", "")))
@@ -166,7 +166,7 @@ func manifest_matches_identity(manifest: Dictionary, identity: Dictionary) -> bo
 	return true
 
 func _update_output_index(output_path: String, ownership: Dictionary) -> void:
-	var index: Dictionary = IconStudioFileUtil.read_json(output_index_path())
+	var index: Dictionary = IconForgeFileUtil.read_json(output_index_path())
 	index[output_path] = {
 		"job_id": ownership.get("job_id", ""),
 		"sha256": ownership.get("sha256", ""),
@@ -175,7 +175,7 @@ func _update_output_index(output_path: String, ownership: Dictionary) -> void:
 		"asset_id": ownership.get("asset_id", ""),
 		"updated_at": ownership.get("updated_at", ""),
 	}
-	IconStudioFileUtil.write_json_atomic(output_index_path(), index)
+	IconForgeFileUtil.write_json_atomic(output_index_path(), index)
 
 func _restore_output(output_path: String, had_output: bool, output_backup_path: String) -> void:
 	if had_output and not output_backup_path.is_empty() and FileAccess.file_exists(output_backup_path):
@@ -185,7 +185,7 @@ func _restore_output(output_path: String, had_output: bool, output_backup_path: 
 
 func _cleanup_temp(temp_path: String) -> void:
 	if FileAccess.file_exists(temp_path):
-		DirAccess.remove_absolute(IconStudioFileUtil.normalize_path(temp_path))
+		DirAccess.remove_absolute(IconForgeFileUtil.normalize_path(temp_path))
 
 func _cleanup_backup(path: String) -> void:
 	if not path.is_empty() and FileAccess.file_exists(path):

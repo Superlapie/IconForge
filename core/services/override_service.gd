@@ -55,7 +55,7 @@ func load_for_source(source_path: String, explicit_path: String = "") -> Diction
 	var path: String = explicit_path if not explicit_path.is_empty() else sidecar_path(source_path)
 	if path.is_empty() or not FileAccess.file_exists(path):
 		return {"success": true, "found": false, "path": path, "override": {}}
-	var override: Dictionary = IconStudioFileUtil.read_json(path)
+	var override: Dictionary = IconForgeFileUtil.read_json(path)
 	if override.is_empty():
 		return {"success": false, "found": true, "path": path, "error": {"code": "OVERRIDE_INVALID", "message": "Override sidecar is empty or invalid JSON.", "path": path}}
 	var errors: Array = validate(override)
@@ -68,7 +68,7 @@ func save_for_source(source_path: String, override: Dictionary) -> Dictionary:
 	if not errors.is_empty():
 		return {"success": false, "error": {"code": "OVERRIDE_INVALID", "message": "Override failed validation.", "details": errors}}
 	var path: String = sidecar_path(source_path)
-	var error: Error = IconStudioFileUtil.write_json_atomic(path, override)
+	var error: Error = IconForgeFileUtil.write_json_atomic(path, override)
 	if error != OK:
 		return {"success": false, "error": {"code": "OVERRIDE_WRITE_FAILED", "message": "Could not write asset-specific override.", "path": path, "godot_error": error}}
 	return {"success": true, "path": path, "override": override}

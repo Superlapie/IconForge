@@ -1,7 +1,7 @@
 extends RefCounted
 class_name JobIdentity
 
-const _Version = preload("res://core/api/icon_studio_version.gd")
+const _Version = preload("res://core/api/icon_forge_version.gd")
 
 ## Canonical deterministic job/cache identity shared across ApiService and manifests.
 
@@ -10,7 +10,7 @@ static func dependency_hashes(source_path: String) -> Array[String]:
 	for dependency in ResourceLoader.get_dependencies(source_path):
 		var dependency_path: String = str(dependency).get_slice("::", 0)
 		if FileAccess.file_exists(dependency_path):
-			hashes.append("%s=%s" % [dependency_path, IconStudioFileUtil.file_hash(dependency_path)])
+			hashes.append("%s=%s" % [dependency_path, IconForgeFileUtil.file_hash(dependency_path)])
 	hashes.sort()
 	return hashes
 

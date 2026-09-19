@@ -1,5 +1,5 @@
 extends RefCounted
-class_name IconStudioVersion
+class_name IconForgeVersion
 
 ## Canonical tool version for API schema, cache, job identity, and manifests.
 

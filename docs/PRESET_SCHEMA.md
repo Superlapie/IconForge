@@ -5,13 +5,13 @@
 Canonical preset schema version is `1`. The authoritative preset description for expert CLI is:
 
 ```bash
-./scripts/iconstudio schema --json
+./scripts/iconforge schema --json
 ```
 
 The machine API schema (operations, purposes, request fields) is separate and returned by:
 
 ```bash
-./scripts/iconstudio api --request <(printf '%s' '{"schema_version":1,"operation":"schema"}') --json
+./scripts/iconforge api --request <(printf '%s' '{"schema_version":1,"operation":"schema"}') --json
 ```
 
 ## preset_revision
@@ -52,7 +52,7 @@ Do **not** bump for documentation-only edits (`display_name`, `description`, `ta
 Validate before committing:
 
 ```bash
-./scripts/iconstudio validate-preset presets/my_item.json --json
+./scripts/iconforge validate-preset presets/my_item.json --json
 ```
 
 Increment `preset_revision` when rendering semantics change materially. Manifests record the revision that produced each output.

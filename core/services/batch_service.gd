@@ -1,12 +1,12 @@
 extends RefCounted
 class_name BatchService
 
-const _Version = preload("res://core/api/icon_studio_version.gd")
+const _Version = preload("res://core/api/icon_forge_version.gd")
 
 var render_service: RenderService = RenderService.new()
 
 func render_batch(input_path: String, preset: PresetDefinition, output_dir: String, options: Dictionary = {}) -> Dictionary:
-	var sources: Array[String] = IconStudioFileUtil.collect_sources(input_path, bool(options.get("recursive", true)))
+	var sources: Array[String] = IconForgeFileUtil.collect_sources(input_path, bool(options.get("recursive", true)))
 	return await render_sources(sources, preset, output_dir, options, input_path)
 
 func render_sources(sources: Array, preset: PresetDefinition, output_dir: String, options: Dictionary = {}, input_path: String = "") -> Dictionary:
@@ -27,7 +27,7 @@ func render_sources(sources: Array, preset: PresetDefinition, output_dir: String
 			filename += ".png"
 		var output_path: String = output_dir.path_join(filename)
 		if used_outputs.has(output_path):
-			output_path = IconStudioFileUtil.ensure_unique_output(output_path, used_outputs)
+			output_path = IconForgeFileUtil.ensure_unique_output(output_path, used_outputs)
 		used_outputs[output_path] = true
 		var result: Dictionary = await render_service.render(str(source_path), preset, options.get("override", {}), output_path, force)
 		if bool(result.get("success", false)):
@@ -55,7 +55,7 @@ func render_sources(sources: Array, preset: PresetDefinition, output_dir: String
 			"summary": {"total": sources.size(), "success": success_count, "failed": failure_count, "warnings": warning_count},
 			"renders": renders
 		}
-		IconStudioFileUtil.write_json_atomic(manifest_path, manifest)
+		IconForgeFileUtil.write_json_atomic(manifest_path, manifest)
 	return {
 		"success": failure_count == 0,
 		"partial_success": success_count > 0 and failure_count > 0,
@@ -68,7 +68,7 @@ func render_sources(sources: Array, preset: PresetDefinition, output_dir: String
 	}
 
 func _expand_pattern(pattern: String, source_path: String, preset_id: String) -> String:
-	var source_name: String = IconStudioFileUtil.source_name(source_path)
+	var source_name: String = IconForgeFileUtil.source_name(source_path)
 	var output: String = pattern
 	output = output.replace("{source_name}", source_name)
 	output = output.replace("{preset}", preset_id)

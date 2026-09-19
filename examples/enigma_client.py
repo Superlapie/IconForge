@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Minimal Enigma client for Icon Studio machine API.
+"""Minimal Enigma client for Icon Forge machine API.
 
 Transport: temporary request file + `api --request FILE --json`.
-Workspace: pass Enigma root via workspace_root or ICONSTUDIO_WORKSPACE_ROOT.
+Workspace: pass Enigma root via workspace_root or ICONFORGE_WORKSPACE_ROOT.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 
-class IconStudioClient:
+class IconForgeClient:
     def __init__(
         self,
         cli_path: str | Path | None = None,
@@ -23,8 +23,8 @@ class IconStudioClient:
         timeout: float | None = 300.0,
     ) -> None:
         root = Path(__file__).resolve().parents[1]
-        self.cli = Path(cli_path) if cli_path else root / "scripts" / "iconstudio"
-        env_root = os.environ.get("ICONSTUDIO_WORKSPACE_ROOT", "")
+        self.cli = Path(cli_path) if cli_path else root / "scripts" / "iconforge"
+        env_root = os.environ.get("ICONFORGE_WORKSPACE_ROOT") or os.environ.get("ICONSTUDIO_WORKSPACE_ROOT", "")
         self.workspace_root = Path(workspace_root) if workspace_root else (Path(env_root) if env_root else None)
         self.timeout = timeout
 
@@ -46,12 +46,12 @@ class IconStudioClient:
             )
         except subprocess.TimeoutExpired as exc:
             raise TimeoutError(
-                f"Icon Studio exceeded timeout of {self.timeout} seconds"
+                f"Icon Forge exceeded timeout of {self.timeout} seconds"
             ) from exc
         finally:
             Path(request_path).unlink(missing_ok=True)
         if not proc.stdout.strip():
-            raise RuntimeError(proc.stderr or "Icon Studio returned no JSON")
+            raise RuntimeError(proc.stderr or "Icon Forge returned no JSON")
         return json.loads(proc.stdout.strip())
 
     def capabilities(self) -> dict[str, Any]:
@@ -138,5 +138,5 @@ class IconStudioClient:
 
 
 if __name__ == "__main__":
-    client = IconStudioClient()
+    client = IconForgeClient()
     print(json.dumps(client.capabilities(), indent=2))

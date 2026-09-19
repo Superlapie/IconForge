@@ -218,14 +218,14 @@ func _render_3d_frame(tree: SceneTree, packed_scene: PackedScene, inspection: Di
 	return {"success": true, "image": image}
 
 func _save_png_atomic(image: Image, path: String) -> Error:
-	var directory_error: Error = IconStudioFileUtil.ensure_directory(path)
+	var directory_error: Error = IconForgeFileUtil.ensure_directory(path)
 	if directory_error != OK:
 		return directory_error
 	var temp_path: String = "%s.tmp.%s.png" % [path, str(Time.get_ticks_usec())]
 	var save_error: Error = image.save_png(temp_path)
 	if save_error != OK:
 		return save_error
-	return IconStudioFileUtil.safe_replace_file(temp_path, path)
+	return IconForgeFileUtil.safe_replace_file(temp_path, path)
 
 func _resolution(preset: PresetDefinition) -> Vector2i:
 	var resolution: Dictionary = preset.data.get("resolution", {})

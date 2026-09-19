@@ -45,7 +45,7 @@ static func default_data(preset_id: String = "custom") -> Dictionary:
 		"preset_revision": 1,
 		"id": preset_id,
 		"display_name": preset_id.replace("_", " ").capitalize(),
-		"description": "Custom Icon Studio render preset.",
+		"description": "Custom Icon Forge render preset.",
 		"tags": ["custom"],
 		"resolution": {"width": 256, "height": 256},
 		"supersampling": 1,

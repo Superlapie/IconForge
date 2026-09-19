@@ -12,7 +12,7 @@ The `purpose` value is not in the purpose registry. Discover valid purposes with
 
 ### `PATH_NOT_ALLOWED`
 
-Safe mode cannot write outside `generated/`. Do not specify arbitrary output paths — Icon Studio chooses the destination from `purpose`.
+Safe mode cannot write outside `generated/`. Do not specify arbitrary output paths — Icon Forge chooses the destination from `purpose`.
 
 ### `needs_review` with `FRAMING_UNRESOLVED`
 
@@ -24,17 +24,17 @@ Expert/legacy renders may write before full validation. Safe-mode `render_asset`
 
 ### Response is not JSON
 
-Use `./scripts/iconstudio api --request FILE --json`, not raw Godot invocation. The wrapper filters engine startup text.
+Use `./scripts/iconforge api --request FILE --json`, not raw Godot invocation. The wrapper filters engine startup text.
 
 ## General
 
-### `ICONSTUDIO_GODOT_NOT_FOUND`
+### `ICONFORGE_GODOT_NOT_FOUND`
 
-Install Godot 4.x or set `ICONSTUDIO_GODOT=/path/to/Godot`. The local development checkout may contain a non-committed binary in `.tools/godot/`.
+Install Godot 4.x or set `ICONFORGE_GODOT=/path/to/Godot`. The local development checkout may contain a non-committed binary in `.tools/godot/`.
 
 ### `SOURCE_LOAD_FAILED` or `SOURCE_INSTANTIATE_FAILED`
 
-Confirm the model exists, imports in Godot, and all relative dependencies are present. Use `inspect_asset` or `inspect SOURCE --json` first. Icon Studio does not invoke Blender or repair malformed model files.
+Confirm the model exists, imports in Godot, and all relative dependencies are present. Use `inspect_asset` or `inspect SOURCE --json` first. Icon Forge does not invoke Blender or repair malformed model files.
 
 ### `OUTPUT_TRANSPARENT`
 

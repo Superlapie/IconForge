@@ -4,7 +4,7 @@ class_name ApiSchema
 const _Operations = preload("res://core/api/operation_registry.gd")
 const _Purposes = preload("res://core/api/purpose_registry.gd")
 const _ErrorCodes = preload("res://core/api/error_codes.gd")
-const _Version = preload("res://core/api/icon_studio_version.gd")
+const _Version = preload("res://core/api/icon_forge_version.gd")
 
 ## Executable source of truth for machine API request validation and discovery.
 
@@ -124,7 +124,7 @@ static func describe() -> Dictionary:
 	return {
 		"schema_version": CURRENT_SCHEMA_VERSION,
 		"tool_version": _Version.VERSION,
-		"description": "Icon Studio canonical machine API schema.",
+		"description": "Icon Forge canonical machine API schema.",
 		"operations": operations,
 		"purposes": purpose_registry.list_purposes(),
 		"error_codes": _ErrorCodes.all_codes(),

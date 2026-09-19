@@ -1,7 +1,7 @@
 extends Node
 
-const IconStudioCliScript = preload("res://cli/cli_app.gd")
-const StudioUiScript = preload("res://app/studio_ui.gd")
+const IconForgeCliScript = preload("res://cli/cli_app.gd")
+const ForgeUiScript = preload("res://app/forge_ui.gd")
 const TestRunnerScript = preload("res://tests/test_runner.gd")
 
 func _ready() -> void:
@@ -19,7 +19,7 @@ func _ready() -> void:
 		get_tree().quit(0 if bool(test_result.get("success", false)) else 1)
 		return
 	if args.has("--gui-interaction-test"):
-		var interaction_gui: Control = StudioUiScript.new()
+		var interaction_gui: Control = ForgeUiScript.new()
 		add_child(interaction_gui)
 		await get_tree().process_frame
 		var interaction_source: String = _argument_value(args, "--source", "")
@@ -28,7 +28,7 @@ func _ready() -> void:
 		get_tree().quit(0 if bool(interaction_result.get("success", false)) else 1)
 		return
 	if args.has("--gui-test"):
-		var gui: Control = StudioUiScript.new()
+		var gui: Control = ForgeUiScript.new()
 		add_child(gui)
 		await get_tree().process_frame
 		var source_path: String = _argument_value(args, "--source", "")
@@ -38,7 +38,7 @@ func _ready() -> void:
 		get_tree().quit(0 if bool(gui_result.get("success", false)) else 1)
 		return
 	if args.has("--gui-native-test"):
-		var native_gui: Control = StudioUiScript.new()
+		var native_gui: Control = ForgeUiScript.new()
 		add_child(native_gui)
 		await get_tree().process_frame
 		var native_source_path: String = _argument_value(args, "--source", "")
@@ -49,11 +49,11 @@ func _ready() -> void:
 		get_tree().quit(0 if bool(native_result.get("success", false)) else 1)
 		return
 	if args.has("--cli"):
-		var cli: RefCounted = IconStudioCliScript.new()
+		var cli: RefCounted = IconForgeCliScript.new()
 		var exit_code: int = await cli.run(args)
 		get_tree().quit(exit_code)
 		return
-	var ui: Control = StudioUiScript.new()
+	var ui: Control = ForgeUiScript.new()
 	add_child(ui)
 
 func _argument_value(args: Array[String], name: String, default_value: String) -> String:

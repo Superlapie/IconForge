@@ -1,6 +1,6 @@
 extends RefCounted
 
-# Enigma Foundry — Icon Studio design tokens
+# Enigma Foundry — Icon Forge design tokens
 const CANVAS: Color = Color("08090B")
 const SIDEBAR: Color = Color("0E1013")
 const RAISED: Color = Color("15181D")

@@ -1,21 +1,21 @@
 # Commercial licensing
 
-Icon Studio is **public source** and **free for noncommercial use**.
+Icon Forge is **public source** and **free for noncommercial use**.
 
 You may read the code, fork the repository, contribute pull requests, learn from it, and use it for personal, hobby, educational, and other noncommercial purposes under the [PolyForm Noncommercial License 1.0.0](LICENSE).
 
 ## When you need a commercial license
 
-You need a paid commercial license from Superlapie if you use Icon Studio — including any part of its source, CLI, GUI, presets, render pipeline, or exported PNG workflow — in connection with a **commercial purpose**.
+You need a paid commercial license from Superlapie if you use Icon Forge — including any part of its source, CLI, GUI, presets, render pipeline, or exported PNG workflow — in connection with a **commercial purpose**.
 
 That generally includes:
 
 - A commercial game or interactive product (including free-to-play or early access titles intended to generate revenue)
 - A product or service sold to customers or clients
 - Internal studio tooling used to ship commercial products
-- SaaS, hosted, or managed offerings built on or around Icon Studio
+- SaaS, hosted, or managed offerings built on or around Icon Forge
 - Client work where the deliverable is a commercial product
-- Redistributing Icon Studio, or a modified/forked version of it, as part of a commercial offering
+- Redistributing Icon Forge, or a modified/forked version of it, as part of a commercial offering
 
 ## What stays free without a commercial license
 
@@ -31,8 +31,8 @@ Noncommercial use remains free, including:
 
 A commercial license is a separate written agreement that grants rights not included in the public noncommercial license, such as:
 
-- Using Icon Studio in a shipped commercial game or product
-- Using Icon Studio in a studio pipeline for commercial inventory, shop, or UI art
+- Using Icon Forge in a shipped commercial game or product
+- Using Icon Forge in a studio pipeline for commercial inventory, shop, or UI art
 - Redistribution or embedding in a commercial toolchain, subject to agreed terms
 
 Exact scope, pricing, support, and sublicensing terms are negotiated per customer.
@@ -41,14 +41,14 @@ Exact scope, pricing, support, and sublicensing terms are negotiated per custome
 
 Contact **Superlapie**:
 
-- Open a [GitHub Discussion](https://github.com/Superlapie/IconStudioEnigma/discussions) with the category **Q&A** or **General**, or
-- Open a [GitHub Issue](https://github.com/Superlapie/IconStudioEnigma/issues) titled `Commercial license inquiry`
+- Open a [GitHub Discussion](https://github.com/Superlapie/IconForgeEnigma/discussions) with the category **Q&A** or **General**, or
+- Open a [GitHub Issue](https://github.com/Superlapie/IconForgeEnigma/issues) titled `Commercial license inquiry`
 
 Include:
 
 1. Your name or company
 2. What you want to build or ship
-3. How Icon Studio would be used (GUI only, CLI in CI, preset pipeline, forked codebase, etc.)
+3. How Icon Forge would be used (GUI only, CLI in CI, preset pipeline, forked codebase, etc.)
 4. Expected team size and distribution model
 
 I review commercial inquiries promptly.

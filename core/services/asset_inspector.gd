@@ -18,7 +18,7 @@ func inspect(source_path: String) -> Dictionary:
 	if ["png", "jpg", "jpeg", "webp"].has(extension):
 		return _inspect_image(source_path)
 	if not ["glb", "gltf"].has(extension):
-		return _failure("SOURCE_FORMAT_UNSUPPORTED", "Icon Studio supports GLB, glTF, PNG, JPEG, and WebP sources.", source_path)
+		return _failure("SOURCE_FORMAT_UNSUPPORTED", "Icon Forge supports GLB, glTF, PNG, JPEG, and WebP sources.", source_path)
 
 	var loaded: Dictionary = loader.load_packed_scene(source_path)
 	if not bool(loaded.get("success", false)):

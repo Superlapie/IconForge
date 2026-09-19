@@ -1,7 +1,7 @@
 extends RefCounted
-class_name IconStudioFileUtil
+class_name IconForgeFileUtil
 
-const APP_DIR: String = "user://iconstudio"
+const APP_DIR: String = "user://iconforge"
 
 ## Test seam: when true, safe_replace_file fails after creating backup (rename step).
 static var test_fail_replace_after_backup: bool = false

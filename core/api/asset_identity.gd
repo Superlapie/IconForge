@@ -15,9 +15,9 @@ static func resolve(asset: String, source_path: String, workspace_root: String, 
 			return validation
 		return {"success": true, "asset_id": explicit_asset_id, "source_identity": _source_identity(source_path, workspace_root)}
 
-	var normalized_source: String = IconStudioFileUtil.normalize_path(source_path)
+	var normalized_source: String = IconForgeFileUtil.normalize_path(source_path)
 	var stem: String = _sanitize_stem(normalized_source.get_file().get_basename())
-	var root: String = IconStudioFileUtil.normalize_path(workspace_root).rstrip("/")
+	var root: String = IconForgeFileUtil.normalize_path(workspace_root).rstrip("/")
 	var identity_basis: String = _workspace_relative(source_path, workspace_root)
 	if not normalized_source.begins_with(root + "/"):
 		identity_basis = normalized_source
@@ -59,15 +59,15 @@ static func _sanitize_stem(stem: String) -> String:
 	return out
 
 static func _source_identity(source_path: String, workspace_root: String) -> String:
-	var absolute: String = IconStudioFileUtil.normalize_path(source_path)
-	var root: String = IconStudioFileUtil.normalize_path(workspace_root).rstrip("/")
+	var absolute: String = IconForgeFileUtil.normalize_path(source_path)
+	var root: String = IconForgeFileUtil.normalize_path(workspace_root).rstrip("/")
 	if absolute.begins_with(root + "/"):
 		return _workspace_relative(source_path, workspace_root)
 	return absolute
 
 static func _workspace_relative(source_path: String, workspace_root: String) -> String:
-	var absolute_source: String = IconStudioFileUtil.normalize_path(source_path)
-	var absolute_root: String = IconStudioFileUtil.normalize_path(workspace_root).rstrip("/")
+	var absolute_source: String = IconForgeFileUtil.normalize_path(source_path)
+	var absolute_root: String = IconForgeFileUtil.normalize_path(workspace_root).rstrip("/")
 	if absolute_source.begins_with(absolute_root + "/"):
 		return absolute_source.substr(absolute_root.length() + 1)
 	return absolute_source.get_file()

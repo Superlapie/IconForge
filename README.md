@@ -1,4 +1,4 @@
-# Icon Studio
+# Icon Forge
 
 [![Godot 4.x](https://img.shields.io/badge/Godot-4.x-478CBF?logo=godotengine&logoColor=white)](https://godotengine.org/)
 [![AI-agent first](https://img.shields.io/badge/AI--agent-first-8b5cf6)](#for-ai-agents)
@@ -9,7 +9,7 @@
 
 **A deterministic, offline content service built for AI agents — with a human GUI on the same render core.**
 
-Icon Studio turns GLB/glTF models and static images into production-ready PNG game imagery. It is designed so a **mediocre or imperfect AI agent** can specify *what* it wants (`inventory_icon`, `shop_thumbnail`, `npc_portrait`) and receive only:
+Icon Forge turns GLB/glTF models and static images into production-ready PNG game imagery. It is designed so a **mediocre or imperfect AI agent** can specify *what* it wants (`inventory_icon`, `shop_thumbnail`, `npc_portrait`) and receive only:
 
 1. **validated correct output**, or
 2. **deterministically auto-corrected + validated output**, or
@@ -17,7 +17,7 @@ Icon Studio turns GLB/glTF models and static images into production-ready PNG ga
 
 Safe mode is designed so production-invalid outputs fail validation or are escalated for review rather than silently accepted.
 
-![Icon Studio GUI — live preview, preset inspector, and export workflow](docs/assets/icon-studio-ui.png)
+![Icon Forge GUI — live preview, preset inspector, and export workflow](docs/assets/icon-forge-ui.png)
 
 ## For AI agents
 
@@ -42,41 +42,41 @@ Safe mode is designed so production-invalid outputs fail validation or are escal
 ```
 
 ```bash
-./scripts/iconstudio api --request examples/render_inventory.json --json
+./scripts/iconforge api --request examples/render_inventory.json --json
 ```
 
 Discover everything from the tool itself:
 
 ```bash
-./scripts/iconstudio api --request <(echo '{"schema_version":1,"operation":"capabilities"}') --json
+./scripts/iconforge api --request <(echo '{"schema_version":1,"operation":"capabilities"}') --json
 ```
 
-Agents should **not** normally send `yaw`, `pitch`, `fov`, `occupancy`, arbitrary output paths, or preset IDs. Icon Studio owns those decisions. See [docs/MACHINE_API.md](docs/MACHINE_API.md).
+Agents should **not** normally send `yaw`, `pitch`, `fov`, `occupancy`, arbitrary output paths, or preset IDs. Icon Forge owns those decisions. See [docs/MACHINE_API.md](docs/MACHINE_API.md).
 
 ## Built for Enigma
 
-This tool was extracted from the content pipeline for **Enigma**, my Godot 3D MMO project. Inventory grids, equipment previews, shop thumbnails, and portrait frames all need the same framing, lighting, and alpha behavior — Icon Studio is the shared render core that makes that repeatable for both **human artists and autonomous agents**.
+This tool was extracted from the content pipeline for **Enigma**, my Godot 3D MMO project. Inventory grids, equipment previews, shop thumbnails, and portrait frames all need the same framing, lighting, and alpha behavior — Icon Forge is the shared render core that makes that repeatable for both **human artists and autonomous agents**.
 
-The repo has **no runtime dependency** on the game itself: it ships as a standalone studio with its own machine API, CLI, presets, validation, and GUI. If you are building a Godot game with lots of item or character art, you can adopt Icon Studio without touching Enigma.
+The repo has **no runtime dependency** on the game itself: it ships as a standalone tool with its own machine API, CLI, presets, validation, and GUI. If you are building a Godot game with lots of item or character art, you can adopt Icon Forge without touching Enigma.
 
 Related open tooling from the same ecosystem: [VFX Forge](https://github.com/Superlapie/VFXForgeEnigma) for real-time VFX authoring.
 
 ## Community project
 
-Icon Studio is intentionally open. I want this to become a **badass community-built tool**, not a private pipeline script.
+Icon Forge is intentionally open. I want this to become a **badass community-built tool**, not a private pipeline script.
 
 - **Good pull requests get reviewed.** See [CONTRIBUTING.md](CONTRIBUTING.md) for scope, quality gate expectations, and first-contribution ideas.
-- **Discussions are open** for preset design, integration questions, and roadmap ideas: [GitHub Discussions](https://github.com/Superlapie/IconStudioEnigma/discussions).
+- **Discussions are open** for preset design, integration questions, and roadmap ideas: [GitHub Discussions](https://github.com/Superlapie/IconForgeEnigma/discussions).
 - **Issues welcome** for reproducible bugs and focused feature requests.
 
-If Icon Studio saves you time on your Godot project, a star, a preset contribution, or a docs fix helps others find it too.
+If Icon Forge saves you time on your Godot project, a star, a preset contribution, or a docs fix helps others find it too.
 
 ## Launch
 
 **AI agents / automation (recommended):**
 
 ```bash
-./scripts/iconstudio api --request examples/render_inventory.json --json
+./scripts/iconforge api --request examples/render_inventory.json --json
 ```
 
 **Human GUI:**
@@ -88,10 +88,10 @@ If Icon Studio saves you time on your Godot project, a star, a preset contributi
 **Expert / legacy CLI** (debugging, humans, authorized tooling — not normal agent use):
 
 ```bash
-./scripts/iconstudio render fixtures/sword.gltf --preset weapon --output out/sword.png --force --json
+./scripts/iconforge render fixtures/sword.gltf --preset weapon --output out/sword.png --force --json
 ```
 
-The included `scripts/iconstudio` wrapper uses a local Godot binary when present and uses `xvfb-run` for software OpenGL batch rendering on headless Linux machines. Set `ICONSTUDIO_GODOT` to use another Godot 4.x executable.
+The included `scripts/iconforge` wrapper uses a local Godot binary when present and uses `xvfb-run` for software OpenGL batch rendering on headless Linux machines. Set `ICONFORGE_GODOT` to use another Godot 4.x executable.
 
 ## What agents get
 
@@ -161,9 +161,9 @@ See [docs/REAL_MODEL_E2E.md](docs/REAL_MODEL_E2E.md) and [docs/GUI_E2E.md](docs/
 
 ## License
 
-Icon Studio uses **dual licensing**:
+Icon Forge uses **dual licensing**:
 
 - **Noncommercial use** — free under the [PolyForm Noncommercial License 1.0.0](LICENSE). You can read, fork, contribute, learn from, and use the project for personal, hobby, educational, and other noncommercial purposes.
 - **Commercial use** — requires a separate paid license. See [COMMERCIAL.md](COMMERCIAL.md) for what counts as commercial use and how to contact me.
 
-If you want to ship a commercial game, product, service, or client deliverable with Icon Studio in the pipeline, get a commercial license first.
+If you want to ship a commercial game, product, service, or client deliverable with Icon Forge in the pipeline, get a commercial license first.

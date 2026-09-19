@@ -6,16 +6,16 @@
 
 1. Read [AGENTS.md](../AGENTS.md) persona A and the decision algorithm.
 2. Call `capabilities` then `schema` via `api --request FILE --json`.
-3. Set `ICONSTUDIO_WORKSPACE_ROOT` (or `--workspace-root`) to your project root.
+3. Set `ICONFORGE_WORKSPACE_ROOT` (or `--workspace-root`) to your project root.
 4. Call `render_asset` or `render_asset_set` with a `purpose`.
 5. On `validated`, use `output.path` and `manifest`. On `needs_review`, stop and escalate.
 
 ## Official client
 
 ```python
-from examples.enigma_client import IconStudioClient
+from examples.enigma_client import IconForgeClient
 
-client = IconStudioClient(workspace_root="/path/to/enigma")
+client = IconForgeClient(workspace_root="/path/to/enigma")
 result = client.render_asset("assets/sword.glb", "inventory_icon")
 ```
 

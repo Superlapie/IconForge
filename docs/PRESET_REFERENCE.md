@@ -1,6 +1,6 @@
 # Preset reference
 
-> **AI agents do not select presets.** In safe mode, send a `purpose` (e.g. `inventory_icon`) and Icon Studio resolves the correct preset internally. This document is for humans, contributors, and expert tooling.
+> **AI agents do not select presets.** In safe mode, send a `purpose` (e.g. `inventory_icon`) and Icon Forge resolves the correct preset internally. This document is for humans, contributors, and expert tooling.
 
 Presets are reusable composition contracts — versioned production recipes with `preset_revision`. They encode intent rather than an asset-specific accident.
 

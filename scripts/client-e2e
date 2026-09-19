@@ -8,18 +8,18 @@ mkdir -p "$WORKSPACE/assets/items"
 
 cp "$ROOT/fixtures/sword.gltf" "$WORKSPACE/assets/items/runic_sword.gltf"
 
-export ICONSTUDIO_WORKSPACE_ROOT="$WORKSPACE"
+export ICONFORGE_WORKSPACE_ROOT="$WORKSPACE"
 
 python3 "$ROOT/examples/enigma_client.py" >/dev/null || exit 1
 
 python3 - <<'PY' "$ROOT" "$WORKSPACE"
 import sys
 from pathlib import Path
-from examples.enigma_client import IconStudioClient
+from examples.enigma_client import IconForgeClient
 
 root = Path(sys.argv[1])
 workspace = Path(sys.argv[2])
-client = IconStudioClient(workspace_root=workspace)
+client = IconForgeClient(workspace_root=workspace)
 cap = client.capabilities()
 assert cap.get("success"), cap
 render = client.render_asset(

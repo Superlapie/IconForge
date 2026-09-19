@@ -1,7 +1,7 @@
 extends RefCounted
 class_name WorkspaceLayout
 
-const SETTINGS_PATH: String = "user://iconstudio/workspace.json"
+const SETTINGS_PATH: String = "user://iconforge/workspace.json"
 
 static func defaults() -> Dictionary:
 	return {
@@ -14,7 +14,7 @@ static func load_settings() -> Dictionary:
 	var result: Dictionary = defaults()
 	if not FileAccess.file_exists(SETTINGS_PATH):
 		return result
-	var data: Dictionary = IconStudioFileUtil.read_json(SETTINGS_PATH)
+	var data: Dictionary = IconForgeFileUtil.read_json(SETTINGS_PATH)
 	if data.is_empty():
 		return result
 	result.merge(data, true)
@@ -23,4 +23,4 @@ static func load_settings() -> Dictionary:
 static func save_settings(settings: Dictionary) -> void:
 	var payload: Dictionary = defaults()
 	payload.merge(settings, true)
-	IconStudioFileUtil.write_json_atomic(SETTINGS_PATH, payload)
+	IconForgeFileUtil.write_json_atomic(SETTINGS_PATH, payload)

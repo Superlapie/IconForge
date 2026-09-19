@@ -4,12 +4,12 @@
 
 ## Source path resolution
 
-Relative `asset` paths resolve **only** under `--workspace-root` / `ICONSTUDIO_WORKSPACE_ROOT` (the repository itself when unset). They never fall back into the Icon Studio checkout.
+Relative `asset` paths resolve **only** under `--workspace-root` / `ICONFORGE_WORKSPACE_ROOT` (the repository itself when unset). They never fall back into the Icon Forge checkout.
 
 | `asset` value | Resolves to |
 |---------------|-------------|
 | `assets/items/sword.glb` | `<workspace_root>/assets/items/sword.glb` |
-| `res://fixtures/sword.gltf` | Icon Studio repository resource |
+| `res://fixtures/sword.gltf` | Icon Forge repository resource |
 | `/absolute/path/model.glb` | Explicit absolute path |
 
 If the workspace-relative file does not exist, the API returns `SOURCE_NOT_FOUND`. Use `res://` when you intentionally want a tool-repository fixture.
@@ -17,14 +17,14 @@ If the workspace-relative file does not exist, the API returns `SOURCE_NOT_FOUND
 ## Transport
 
 ```bash
-./scripts/iconstudio api --request request.json --json
+./scripts/iconforge api --request request.json --json
 ```
 
 Optional workspace (recommended for Enigma):
 
 ```bash
-export ICONSTUDIO_WORKSPACE_ROOT=/path/to/enigma
-./scripts/iconstudio api --workspace-root "$ICONSTUDIO_WORKSPACE_ROOT" --request request.json --json
+export ICONFORGE_WORKSPACE_ROOT=/path/to/enigma
+./scripts/iconforge api --workspace-root "$ICONFORGE_WORKSPACE_ROOT" --request request.json --json
 ```
 
 Official Python wrapper: [examples/enigma_client.py](../examples/enigma_client.py) (uses temporary request files, not stdin; default subprocess timeout 300s).
@@ -137,7 +137,7 @@ Changing source, sidecar, hints, preset content, or tool version invalidates the
 
 `validate_output` checks visual production constraints **and** provenance when a production record exists. A mismatch of source identity, source hash, purpose, or output SHA-256 returns `MANIFEST_MISMATCH`. Opaque images without matching production metrics return `VALIDATION_METADATA_REQUIRED`.
 
-`validated` means the requested purpose produced an artifact that satisfies Icon Studio's technical production contract. It does not prove that the mesh is semantically an NPC, weapon, or other subject class.
+`validated` means the requested purpose produced an artifact that satisfies Icon Forge's technical production contract. It does not prove that the mesh is semantically an NPC, weapon, or other subject class.
 
 Cache hits return the same `manifest` field. Safe-mode `explain_result` should use `job_id`. A `manifest` path is accepted only if it is inside `<workspace>/generated/manifests/`.
 
@@ -183,7 +183,7 @@ Cache hits return the same `manifest` field. Safe-mode `explain_result` should u
 ## Expert mode (maintainers only)
 
 ```bash
-./scripts/iconstudio api --request expert.json --expert --json
+./scripts/iconforge api --request expert.json --expert --json
 ```
 
 Not for normal agent integration.

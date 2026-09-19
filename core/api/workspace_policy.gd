@@ -60,7 +60,7 @@ func _is_under_generated_root(path: String) -> bool:
 	return absolute == root or absolute.begins_with(root + "/")
 
 func _contains_traversal(path: String) -> bool:
-	var normalized: String = IconStudioFileUtil.normalize_path(path)
+	var normalized: String = IconForgeFileUtil.normalize_path(path)
 	for part in normalized.split("/"):
 		if part == "..":
 			return true
@@ -76,8 +76,8 @@ func _resolve_to_absolute(path: String) -> String:
 
 func _normalize_absolute(path: String) -> String:
 	if path.begins_with("res://") or path.begins_with("user://"):
-		return IconStudioFileUtil.normalize_path(ProjectSettings.globalize_path(path))
-	return IconStudioFileUtil.normalize_path(path)
+		return IconForgeFileUtil.normalize_path(ProjectSettings.globalize_path(path))
+	return IconForgeFileUtil.normalize_path(path)
 
 func _error(code: String, message: String, path: String = "") -> Dictionary:
 	return {

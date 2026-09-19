@@ -1,5 +1,5 @@
 extends RefCounted
-class_name IconStudioTestRunner
+class_name IconForgeTestRunner
 
 const PreviewCameraScript = preload("res://core/services/preview_camera.gd")
 const ApiTestRunnerScript = preload("res://tests/api_test_runner.gd")
@@ -65,7 +65,7 @@ func _test_override_contract() -> void:
 func _test_export_override_isolation() -> void:
 	var base: Dictionary = {"yaw": 12.0, "occupancy": 0.8}
 	var settings: Dictionary = {"width": 512, "height": 512, "supersampling": 4, "transparent": false, "overwrite": false}
-	var export_override: Dictionary = StudioUi.build_export_override(base, settings)
+	var export_override: Dictionary = ForgeUi.build_export_override(base, settings)
 	_assert(not base.has("supersampling"), "export helper does not mutate asset override")
 	_assert(int(export_override.get("supersampling", 0)) == 4, "export helper applies supersampling ephemerally")
 	_assert(str(export_override.get("background", "")) == "gradient", "export helper applies opaque background")
@@ -146,7 +146,7 @@ func _test_image_quality_contract() -> void:
 	_assert(not bool(quality.get("success", true)), "quality gate rejects fully transparent output")
 
 func _test_file_collection_contract() -> void:
-	var sources: Array[String] = IconStudioFileUtil.collect_sources(ProjectSettings.globalize_path("res://tests/e2e/assets/real"), false)
+	var sources: Array[String] = IconForgeFileUtil.collect_sources(ProjectSettings.globalize_path("res://tests/e2e/assets/real"), false)
 	var glb_count: int = 0
 	var extracted_texture_count: int = 0
 	for source in sources:

@@ -1,8 +1,8 @@
 # CLI reference
 
-> **AI agents:** use the [Machine API](MACHINE_API.md), not raw CLI commands. This reference documents the `iconstudio` transport layer.
+> **AI agents:** use the [Machine API](MACHINE_API.md), not raw CLI commands. This reference documents the `iconforge` transport layer.
 
-All commands are available through `./scripts/iconstudio`. Add `--json` to receive one machine-readable object. Exit codes:
+All commands are available through `./scripts/iconforge`. Add `--json` to receive one machine-readable object. Exit codes:
 
 - `0`: success.
 - `2`: invalid command, argument, source, preset, or input JSON.
@@ -13,7 +13,7 @@ All commands are available through `./scripts/iconstudio`. Add `--json` to recei
 ## Machine API (primary interface for agents)
 
 ```bash
-./scripts/iconstudio api --request request.json --json
+./scripts/iconforge api --request request.json --json
 ```
 
 Safe-mode agents send semantic requests (`purpose`, not `yaw`/`fov`). Expert mode: add `--expert`.
@@ -57,12 +57,12 @@ validate-output IMAGE.png [--preset ID] [--occupancy FLOAT]
 **Agent (recommended):**
 
 ```bash
-./scripts/iconstudio api --request examples/render_inventory.json --json
+./scripts/iconforge api --request examples/render_inventory.json --json
 ```
 
 **Expert:**
 
 ```bash
-./scripts/iconstudio inspect fixtures/sword.gltf --json
-./scripts/iconstudio render fixtures/sword.gltf --preset weapon --output out/sword.png --json
+./scripts/iconforge inspect fixtures/sword.gltf --json
+./scripts/iconforge render fixtures/sword.gltf --preset weapon --output out/sword.png --json
 ```

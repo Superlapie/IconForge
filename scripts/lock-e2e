@@ -2,7 +2,7 @@
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CLI="$ROOT/scripts/iconstudio"
+CLI="$ROOT/scripts/iconforge"
 WORKSPACE="$ROOT/out/lock_e2e_workspace"
 rm -rf "$WORKSPACE"
 mkdir -p "$WORKSPACE/a" "$WORKSPACE/b" "$WORKSPACE/requests"

@@ -2,11 +2,13 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CLI="$ROOT/scripts/iconstudio"
+CLI="$ROOT/scripts/iconforge"
 REAL_DIR="$ROOT/tests/e2e/assets/real"
 OUTPUT_DIR="$ROOT/out/e2e-real"
 
-if [[ -n "${ICONSTUDIO_GODOT:-}" ]]; then
+if [[ -n "${ICONFORGE_GODOT:-}" ]]; then
+	GODOT_BIN="$ICONFORGE_GODOT"
+elif [[ -n "${ICONSTUDIO_GODOT:-}" ]]; then
 	GODOT_BIN="$ICONSTUDIO_GODOT"
 elif [[ -x "$ROOT/.tools/godot/Godot_v4.7.2-stable_linux.x86_64" ]]; then
 	GODOT_BIN="$ROOT/.tools/godot/Godot_v4.7.2-stable_linux.x86_64"
@@ -21,7 +23,7 @@ fi
 
 mkdir -p "$OUTPUT_DIR/batch"
 
-echo "Icon Studio real-model E2E"
+echo "Icon Forge real-model E2E"
 echo "=========================="
 
 # A fresh checkout has not necessarily imported newly added GLB files yet.

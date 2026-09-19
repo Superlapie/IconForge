@@ -1,5 +1,5 @@
 extends RefCounted
-class_name IconStudioCli
+class_name IconForgeCli
 
 const EXIT_OK: int = 0
 const EXIT_USAGE: int = 2
@@ -52,7 +52,7 @@ func run(raw_args: Array[String]) -> int:
 func _inspect(args: Array[String]) -> int:
 	var source: String = _first_positional(args, 1)
 	if source.is_empty():
-		return _finish(_error("CLI_USAGE", "inspect requires a source path.", {"usage": "iconstudio inspect SOURCE [--json]"}), _json_mode(args), EXIT_USAGE)
+		return _finish(_error("CLI_USAGE", "inspect requires a source path.", {"usage": "iconforge inspect SOURCE [--json]"}), _json_mode(args), EXIT_USAGE)
 	var result: Dictionary = inspector.inspect(_path(source))
 	return _finish(result, _json_mode(args), EXIT_OK if bool(result.get("success", false)) else EXIT_USAGE)
 
@@ -73,9 +73,9 @@ func _render(args: Array[String], preview: bool) -> int:
 	var output_path: String = _option(args, "--output", "")
 	if output_path.is_empty():
 		if preview:
-			output_path = "user://iconstudio/previews/%s_%s.png" % [IconStudioFileUtil.source_name(source_path), preset_id]
+			output_path = "user://iconforge/previews/%s_%s.png" % [IconForgeFileUtil.source_name(source_path), preset_id]
 		else:
-			output_path = "out/%s_%s.png" % [IconStudioFileUtil.source_name(source_path), preset_id]
+			output_path = "out/%s_%s.png" % [IconForgeFileUtil.source_name(source_path), preset_id]
 	output_path = _path(output_path)
 	var override: Dictionary = _inline_override(args)
 	var explicit_override: String = _option(args, "--override", "")
@@ -136,7 +136,7 @@ func _validate_preset(args: Array[String]) -> int:
 	if path.is_empty():
 		return _finish(_error("CLI_USAGE", "validate-preset requires a JSON file.", {}), _json_mode(args), EXIT_USAGE)
 	var absolute: String = _path(path)
-	var raw: Dictionary = IconStudioFileUtil.read_json(absolute)
+	var raw: Dictionary = IconForgeFileUtil.read_json(absolute)
 	if raw.is_empty():
 		return _finish(_error("PRESET_READ_FAILED", "Could not read preset JSON.", {"path": absolute}), _json_mode(args), EXIT_USAGE)
 	var preset: PresetDefinition = PresetDefinition.new(raw, absolute)
@@ -177,12 +177,14 @@ func _api(args: Array[String]) -> int:
 	else:
 		var request_path: String = _option(args, "--request", "")
 		if request_path.is_empty():
-			return _finish(_error("CLI_USAGE", "api requires --request FILE or --stdin.", {"usage": "iconstudio api --request request.json --json"}), _json_mode(args), EXIT_USAGE)
-		request = IconStudioFileUtil.read_json(_path(request_path))
+			return _finish(_error("CLI_USAGE", "api requires --request FILE or --stdin.", {"usage": "iconforge api --request request.json --json"}), _json_mode(args), EXIT_USAGE)
+		request = IconForgeFileUtil.read_json(_path(request_path))
 		if request.is_empty():
 			return _finish(_error("INVALID_REQUEST", "Could not read request JSON.", {"path": request_path}), _json_mode(args), EXIT_USAGE)
 	var safe_mode: bool = not _has_flag(args, "--expert")
-	var workspace_root: String = OS.get_environment("ICONSTUDIO_WORKSPACE_ROOT")
+	var workspace_root: String = OS.get_environment("ICONFORGE_WORKSPACE_ROOT")
+	if workspace_root.is_empty():
+		workspace_root = OS.get_environment("ICONSTUDIO_WORKSPACE_ROOT")
 	var workspace_option: String = _option(args, "--workspace-root", "")
 	if not workspace_option.is_empty():
 		workspace_root = workspace_option
@@ -293,7 +295,7 @@ func _finish(result: Dictionary, json_mode: bool, exit_code: int) -> int:
 		if bool(result.get("success", false)):
 			print(_human_result(result))
 		else:
-			print("ERROR %s" % str(result.get("error", {}).get("code", "ICONSTUDIO_ERROR")))
+			print("ERROR %s" % str(result.get("error", {}).get("code", "ICONFORGE_ERROR")))
 			print(str(result.get("error", {}).get("message", "The command failed.")))
 	return exit_code
 
@@ -316,7 +318,7 @@ func _error(code: String, message: String, details: Dictionary) -> Dictionary:
 func _help_result() -> Dictionary:
 	return {
 		"success": true,
-		"usage": "iconstudio COMMAND [ARGS] [OPTIONS]",
+		"usage": "iconforge COMMAND [ARGS] [OPTIONS]",
 		"commands": {
 			"inspect": "Inspect a GLB/glTF/image and return metrics.",
 			"preview": "Render a preview to the user preview directory.",
@@ -329,7 +331,7 @@ func _help_result() -> Dictionary:
 			"schema": "Print the self-describing preset schema.",
 			"compare": "Compare two images with deterministic pixel metrics.",
 			"validate-output": "Run resolution, alpha, clipping, and occupancy checks.",
-			"api": "Execute a canonical machine API request (--request FILE). Optional --workspace-root or ICONSTUDIO_WORKSPACE_ROOT."
+			"api": "Execute a canonical machine API request (--request FILE). Optional --workspace-root or ICONFORGE_WORKSPACE_ROOT."
 		},
 		"global_options": ["--json", "--force", "--preset ID", "--output PATH", "--request FILE", "--stdin", "--expert"]
 	}

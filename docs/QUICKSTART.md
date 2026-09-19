@@ -2,10 +2,10 @@
 
 ## For AI agents (start here)
 
-Icon Studio is built for autonomous agents. Use the semantic machine API:
+Icon Forge is built for autonomous agents. Use the semantic machine API:
 
 ```bash
-./scripts/iconstudio api --request examples/render_inventory.json --json
+./scripts/iconforge api --request examples/render_inventory.json --json
 ```
 
 ```json
@@ -20,7 +20,7 @@ Icon Studio is built for autonomous agents. Use the semantic machine API:
 Discover supported operations and purposes:
 
 ```bash
-./scripts/iconstudio api --request <(printf '%s' '{"schema_version":1,"operation":"capabilities"}') --json
+./scripts/iconforge api --request <(printf '%s' '{"schema_version":1,"operation":"capabilities"}') --json
 ```
 
 Read [AGENTS.md](../AGENTS.md) and [MACHINE_API.md](MACHINE_API.md) for the full contract.
@@ -38,13 +38,13 @@ Drop a `.glb`, `.gltf`, `.png`, `.jpg`, or `.webp` into the source panel, choose
 ### Inspect a source
 
 ```bash
-./scripts/iconstudio inspect fixtures/sword.gltf --json
+./scripts/iconforge inspect fixtures/sword.gltf --json
 ```
 
 ### Render one source
 
 ```bash
-./scripts/iconstudio render fixtures/sword.gltf \
+./scripts/iconforge render fixtures/sword.gltf \
   --preset weapon \
   --output out/sword.png \
   --force \
@@ -54,7 +54,7 @@ Drop a `.glb`, `.gltf`, `.png`, `.jpg`, or `.webp` into the source panel, choose
 ### Render a directory
 
 ```bash
-./scripts/iconstudio render-batch fixtures \
+./scripts/iconforge render-batch fixtures \
   --preset neutral_asset_thumbnail \
   --output out/icons \
   --manifest out/icons/manifest.json \

@@ -13,14 +13,14 @@
 }
 ```
 
-Icon Studio inspects the source once, resolves each recipe, renders independently, validates each output, and returns one aggregate result. Valid outputs are preserved even if a sibling fails (`partial_success`).
+Icon Forge inspects the source once, resolves each recipe, renders independently, validates each output, and returns one aggregate result. Valid outputs are preserved even if a sibling fails (`partial_success`).
 
 ## Legacy expert: `render-batch`
 
 Batch rendering discovers supported sources recursively (`.glb`, `.gltf`, `.png`, `.jpg`, `.jpeg`, `.webp`), processes them independently, and continues after a source failure.
 
 ```bash
-./scripts/iconstudio render-batch ./items \
+./scripts/iconforge render-batch ./items \
   --preset inventory_item \
   --output ./generated/icons \
   --manifest ./generated/icons/manifest.json \

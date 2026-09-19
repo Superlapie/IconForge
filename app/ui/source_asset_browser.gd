@@ -62,7 +62,7 @@ func _ready() -> void:
 func add_source(path: String) -> void:
 	var entry: Dictionary = {
 		"path": path,
-		"name": IconStudioFileUtil.source_name(path),
+		"name": IconForgeFileUtil.source_name(path),
 		"extension": path.get_extension().to_upper(),
 		"kind": _kind_for_path(path)
 	}

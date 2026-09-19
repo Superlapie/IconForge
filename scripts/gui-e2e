@@ -4,10 +4,12 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REAL_SOURCE="${1:-$ROOT/tests/e2e/assets/real/Avocado.glb}"
 OUTPUT_DIR="$ROOT/out/gui-e2e"
-TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/iconstudio-gui-e2e.XXXXXX")"
+TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/iconforge-gui-e2e.XXXXXX")"
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
-if [[ -n "${ICONSTUDIO_GODOT:-}" ]]; then
+if [[ -n "${ICONFORGE_GODOT:-}" ]]; then
+	GODOT_BIN="$ICONFORGE_GODOT"
+elif [[ -n "${ICONSTUDIO_GODOT:-}" ]]; then
 	GODOT_BIN="$ICONSTUDIO_GODOT"
 elif [[ -x "$ROOT/.tools/godot/Godot_v4.7.2-stable_linux.x86_64" ]]; then
 	GODOT_BIN="$ROOT/.tools/godot/Godot_v4.7.2-stable_linux.x86_64"
@@ -36,7 +38,7 @@ RESULT_PATH="$OUTPUT_DIR/result.json"
 SCREENSHOT_PATH="$OUTPUT_DIR/drop_preview.png"
 LOG_PATH="$OUTPUT_DIR/godot.log"
 
-echo "Icon Studio GUI drag/drop E2E"
+echo "Icon Forge GUI drag/drop E2E"
 echo "=============================="
 echo "real source: $REAL_SOURCE"
 echo "external drop copy: $DROP_SOURCE"

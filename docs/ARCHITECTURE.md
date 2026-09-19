@@ -20,8 +20,8 @@ QualityService       alpha/resolution/clipping/occupancy checks
 OutputLock           cross-process exclusive lease around output commit
 ManifestService      production manifests, ownership records, output index
 BatchService         discovery, naming, isolation, progress/result manifest
-IconStudioCli        transport over ApiService + legacy expert commands
-StudioUi             human-facing controls over the same services
+IconForgeCli         transport over ApiService + legacy expert commands
+ForgeUi              human-facing controls over the same services
 ```
 
 The machine API sits **above** core render services. CLI `api` commands and future transports call `ApiService.execute()`. The GUI and legacy CLI expert commands may call `RenderService` directly. All paths share inspection, presets, framing, quality, cache, and manifests.

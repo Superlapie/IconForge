@@ -2,7 +2,7 @@ extends RefCounted
 class_name CliRecipe
 
 static func build_render_command(source_path: String, preset_id: String, override: Dictionary, output_path: String = "") -> String:
-	var parts: PackedStringArray = PackedStringArray(["iconstudio render \"%s\"" % source_path, "--preset %s" % preset_id])
+	var parts: PackedStringArray = PackedStringArray(["iconforge render \"%s\"" % source_path, "--preset %s" % preset_id])
 	for key in ["yaw", "pitch", "roll", "occupancy", "padding", "scale"]:
 		if override.has(key):
 			parts.append("--%s %s" % [key, _format_value(key, override[key])])

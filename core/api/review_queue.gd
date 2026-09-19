@@ -9,7 +9,7 @@ func _init(root: String = "") -> void:
 	if root.is_empty():
 		workspace_root = ProjectSettings.globalize_path("res://")
 	else:
-		workspace_root = IconStudioFileUtil.normalize_path(root)
+		workspace_root = IconForgeFileUtil.normalize_path(root)
 
 func record(entry: Dictionary) -> void:
 	var queue: Array = _load_queue()
@@ -25,10 +25,10 @@ func queue_path() -> String:
 	return workspace_root.path_join("generated/review_queue.json")
 
 func _load_queue() -> Array:
-	var data: Dictionary = IconStudioFileUtil.read_json(queue_path())
+	var data: Dictionary = IconForgeFileUtil.read_json(queue_path())
 	if data.has("entries") and data["entries"] is Array:
 		return data["entries"]
 	return []
 
 func _save_queue(entries: Array) -> void:
-	IconStudioFileUtil.write_json_atomic(queue_path(), {"schema_version": 1, "entries": entries})
+	IconForgeFileUtil.write_json_atomic(queue_path(), {"schema_version": 1, "entries": entries})
