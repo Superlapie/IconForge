@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -u
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CLI="$ROOT/scripts/iconstudio"
+WORKSPACE="$ROOT/out/lock_e2e_workspace"
+rm -rf "$WORKSPACE"
+mkdir -p "$WORKSPACE/a" "$WORKSPACE/b" "$WORKSPACE/requests"
+
+cp "$ROOT/fixtures/sword.gltf" "$WORKSPACE/a/alpha.gltf"
+cp "$ROOT/fixtures/potion.gltf" "$WORKSPACE/b/beta.gltf"
+
+ASSET_ID="lock_e2e_shared"
+printf '%s\n' "{\"schema_version\":1,\"operation\":\"render_asset\",\"asset\":\"$WORKSPACE/a/alpha.gltf\",\"purpose\":\"inventory_icon\",\"asset_id\":\"$ASSET_ID\",\"force\":true}" >"$WORKSPACE/requests/a.json"
+printf '%s\n' "{\"schema_version\":1,\"operation\":\"render_asset\",\"asset\":\"$WORKSPACE/b/beta.gltf\",\"purpose\":\"inventory_icon\",\"asset_id\":\"$ASSET_ID\",\"force\":true}" >"$WORKSPACE/requests/b.json"
+
+"$CLI" api --request "$WORKSPACE/requests/a.json" --json >"$WORKSPACE/a.out" &
+pid_a=$!
+"$CLI" api --request "$WORKSPACE/requests/b.json" --json >"$WORKSPACE/b.out" &
+pid_b=$!
+wait "$pid_a"
+status_a=$?
+wait "$pid_b"
+status_b=$?
+
+python3 - "$WORKSPACE/a.out" "$WORKSPACE/b.out" "$status_a" "$status_b" <<'PY'
+import json, sys
+from pathlib import Path
+
+def load(path):
+    text = Path(path).read_text().strip()
+    if not text:
+        return {"success": False, "code": "RUNTIME_START_FAILED", "status": "failed"}
+    return json.loads(text.splitlines()[-1])
+
+a = load(sys.argv[1])
+b = load(sys.argv[2])
+results = [a, b]
+validated = [item for item in results if bool(item.get("success")) and item.get("status") == "validated"]
+blocked = [item for item in results if str(item.get("code", "")) in {"ASSET_ID_COLLISION", "OUTPUT_LOCKED"}]
+if len(validated) != 1 or len(blocked) != 1:
+    print("FAIL  parallel ownership: expected one validated and one collision/lock")
+    print("A", a)
+    print("B", b)
+    sys.exit(1)
+print("PASS  parallel ownership lock")
+PY

@@ -66,6 +66,13 @@ else
 	echo "FAIL  official Enigma client E2E"
 fi
 
+if "$ROOT/scripts/lock-e2e"; then
+	:
+else
+	failed=1
+	echo "FAIL  cross-process output lock"
+fi
+
 for preset in "$ROOT"/presets/*.json; do
 	if "$CLI" validate-preset "$preset" --json >/dev/null; then
 		:

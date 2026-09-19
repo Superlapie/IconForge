@@ -20,11 +20,13 @@ class IconStudioClient:
         self,
         cli_path: str | Path | None = None,
         workspace_root: str | Path | None = None,
+        timeout: float | None = 300.0,
     ) -> None:
         root = Path(__file__).resolve().parents[1]
         self.cli = Path(cli_path) if cli_path else root / "scripts" / "iconstudio"
         env_root = os.environ.get("ICONSTUDIO_WORKSPACE_ROOT", "")
         self.workspace_root = Path(workspace_root) if workspace_root else (Path(env_root) if env_root else None)
+        self.timeout = timeout
 
     def _execute(self, request: dict[str, Any]) -> dict[str, Any]:
         cmd = [str(self.cli), "api", "--json"]
@@ -35,7 +37,17 @@ class IconStudioClient:
             request_path = handle.name
         cmd.extend(["--request", request_path])
         try:
-            proc = subprocess.run(cmd, text=True, capture_output=True, check=False)
+            proc = subprocess.run(
+                cmd,
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=self.timeout,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise TimeoutError(
+                f"Icon Studio exceeded timeout of {self.timeout} seconds"
+            ) from exc
         finally:
             Path(request_path).unlink(missing_ok=True)
         if not proc.stdout.strip():

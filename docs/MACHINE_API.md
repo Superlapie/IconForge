@@ -4,13 +4,15 @@
 
 ## Source path resolution
 
-When `--workspace-root` or `ICONSTUDIO_WORKSPACE_ROOT` is set, relative `asset` paths resolve under that workspace first.
+Relative `asset` paths resolve **only** under `--workspace-root` / `ICONSTUDIO_WORKSPACE_ROOT` (the repository itself when unset). They never fall back into the Icon Studio checkout.
 
 | `asset` value | Resolves to |
 |---------------|-------------|
 | `assets/items/sword.glb` | `<workspace_root>/assets/items/sword.glb` |
 | `res://fixtures/sword.gltf` | Icon Studio repository resource |
 | `/absolute/path/model.glb` | Explicit absolute path |
+
+If the workspace-relative file does not exist, the API returns `SOURCE_NOT_FOUND`. Use `res://` when you intentionally want a tool-repository fixture.
 
 ## Transport
 
@@ -25,7 +27,9 @@ export ICONSTUDIO_WORKSPACE_ROOT=/path/to/enigma
 ./scripts/iconstudio api --workspace-root "$ICONSTUDIO_WORKSPACE_ROOT" --request request.json --json
 ```
 
-Official Python wrapper: [examples/enigma_client.py](../examples/enigma_client.py) (uses temporary request files, not stdin).
+Official Python wrapper: [examples/enigma_client.py](../examples/enigma_client.py) (uses temporary request files, not stdin; default subprocess timeout 300s).
+
+JSON mode always returns one JSON object. If Godot fails before the API emits a response, the launcher returns `RUNTIME_START_FAILED` with `recommended_action: check_runtime_installation`.
 
 ## Agent decision algorithm
 
@@ -62,10 +66,13 @@ The API inspects the source once per `render_asset_set` call and reuses that ins
 
 Aggregate status rules:
 
-- all `validated` → `validated`
-- at least one `validated` plus any non-validated → `partial_success`
+- all `validated` → `validated` **and** the aggregate manifest was committed
+- at least one `validated` plus any non-validated → `partial_success` **and** the aggregate manifest was committed
 - zero `validated`, all `needs_review` → `needs_review`
 - zero `validated` with any hard failure → `failed`
+- aggregate manifest write failure → `failed` / `WRITE_FAILED` (child results remain in `outputs`; do not treat the set as validated)
+
+Cross-process output locking surrounds resolve → ownership → cache → render → validate → commit. Contended jobs wait up to 60s, then return `OUTPUT_LOCKED` with `recommended_action: retry_same_request`.
 
 ## Safe hints (optional)
 
@@ -94,13 +101,14 @@ Morphology (elongated, flat, tall, etc.) affects orientation only — not semant
 - Optional. When omitted, a collision-resistant default is derived from the **workspace-relative** source path (`basename__hash`), so moving the Enigma checkout does not rename generated files.
 - When provided: non-empty, filename-safe lowercase, max 128 chars, no path separators or traversal.
 - Two different sources must not silently share the same output identity.
-- `force: true` bypasses cache only. It never overrides `ASSET_ID_COLLISION` ownership.
+- `force: true` bypasses cache only. It never overrides `ASSET_ID_COLLISION` or `OUTPUT_OWNERSHIP_UNKNOWN`.
+- An existing PNG without a trustworthy adjacent `.owner.json` record is `OUTPUT_OWNERSHIP_UNKNOWN`, not unowned.
 
 ## Human sidecars
 
 Durable `<source>.icon.json` corrections are a **human/maintainer** mechanism. They win over agent hints. Safe-mode callers must not invent sidecar fields, camera values, or lighting.
 
-Sidecar JSON is **recursively strict**. Unknown keys are rejected at every nesting level, including `camera`, `lighting`, `composition`, and `environment`. A typo such as `"ocupancy"` or `"lighting.key.energy"` fails closed.
+Sidecar JSON is **recursively strict**. Unknown keys are rejected at every nesting level, including `camera`, `lighting`, `composition`, and `environment`. Known fields are type-, range-, and enum-checked. A typo such as `"ocupancy"` or a value such as `"camera": {"fov": "banana"}` fails closed.
 
 Canonical lighting keys (human sidecars only; not part of the safe Machine API):
 
@@ -125,7 +133,11 @@ Changing source, sidecar, hints, preset content, or tool version invalidates the
 
 ## Manifest semantics
 
-`validated` is returned only when the PNG and matching production manifest were both committed. If the manifest write fails after replacing the PNG, the previous valid artifact is restored (or the unmanifested PNG is removed) and the API returns `WRITE_FAILED`.
+`validated` is returned only when the PNG, matching production manifest, and output ownership record were committed. If the manifest or ownership write fails after replacing the PNG, the previous valid artifact is restored (or the unmanifested PNG is removed) and the API returns `WRITE_FAILED`.
+
+`validate_output` checks visual production constraints **and** provenance when a production record exists. A mismatch of source identity, source hash, purpose, or output SHA-256 returns `MANIFEST_MISMATCH`. Opaque images without matching production metrics return `VALIDATION_METADATA_REQUIRED`.
+
+`validated` means the requested purpose produced an artifact that satisfies Icon Studio's technical production contract. It does not prove that the mesh is semantically an NPC, weapon, or other subject class.
 
 Cache hits return the same `manifest` field. Safe-mode `explain_result` should use `job_id`. A `manifest` path is accepted only if it is inside `<workspace>/generated/manifests/`.
 

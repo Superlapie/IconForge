@@ -118,6 +118,9 @@ var last_drop_result: Dictionary = {}
 var last_preview_result: Dictionary = {}
 var last_drop_files: PackedStringArray = PackedStringArray()
 var drop_event_received: bool = false
+var sidecar_invalid: bool = false
+var sidecar_error: Dictionary = {}
+var _pending_export_settings: Dictionary = {}
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -643,6 +646,16 @@ func _on_source_selected(index: int) -> void:
 	if empty_workspace != null:
 		empty_workspace.hide()
 	var sidecar_result: Dictionary = override_service.load_for_source(active_source)
+	sidecar_invalid = not bool(sidecar_result.get("success", false)) and bool(sidecar_result.get("found", false))
+	sidecar_error = sidecar_result.get("error", {}) if sidecar_invalid else {}
+	if sidecar_invalid:
+		active_override = {}
+		source_detail.text = "%s\nSidecar invalid — %s" % [active_source.get_file(), str(sidecar_error.get("message", "Override sidecar failed validation."))]
+		_set_status("Sidecar invalid — fix %s before preview, export, or save." % override_service.sidecar_path(active_source).get_file())
+		variants_panel.set_variants(session.get_variants(active_source))
+		_sync_controls_from_override()
+		_update_ui_state()
+		return
 	active_override = sidecar_result.get("override", {}).duplicate(true)
 	var result: Dictionary = inspector.inspect(active_source)
 	_last_inspection = result.duplicate(true)
@@ -825,11 +838,22 @@ func _on_export_menu(id: int) -> void:
 
 func _on_export_drawer_confirmed(settings: Dictionary) -> void:
 	export_destination = str(settings.get("destination", export_destination))
-	active_override["width"] = int(settings.get("width", 256))
-	active_override["height"] = int(settings.get("height", 256))
-	active_override["supersampling"] = int(settings.get("supersampling", 2))
+	_pending_export_settings = settings.duplicate(true)
 	export_format = "png"
 	_export_current()
+	_pending_export_settings = {}
+
+static func build_export_override(base: Dictionary, settings: Dictionary) -> Dictionary:
+	var export_override: Dictionary = base.duplicate(true)
+	if settings.has("width"):
+		export_override["width"] = int(settings.get("width", 256))
+	if settings.has("height"):
+		export_override["height"] = int(settings.get("height", 256))
+	if settings.has("supersampling"):
+		export_override["supersampling"] = int(settings.get("supersampling", 2))
+	if settings.has("transparent"):
+		export_override["background"] = "transparent" if bool(settings.get("transparent", true)) else "gradient"
+	return export_override
 
 func _export_defaults() -> Dictionary:
 	var width: int = 256
@@ -1102,21 +1126,22 @@ func _run_batch_render() -> void:
 	var output_dir: String = ProjectSettings.globalize_path(export_destination)
 	IconStudioFileUtil.ensure_directory(output_dir)
 	batch_panel.set_sources(sources, active_preset.get_display_name())
-	var success_count: int = 0
-	var failure_count: int = 0
-	for index in sources.size():
-		var source_path: String = sources[index]
-		var output_path: String = output_dir.path_join("%s_%s.png" % [IconStudioFileUtil.source_name(source_path), active_preset.get_id()])
-		var result: Dictionary = await render_service.render(source_path, active_preset, active_override, output_path, true)
-		if bool(result.get("success", false)):
-			success_count += 1
-			if source_path == active_source:
-				source_browser.set_thumbnail(source_path, preview_display.get_base_texture())
-		else:
-			failure_count += 1
-		batch_panel.set_progress(index + 1, sources.size(), 0, failure_count)
+	var result: Dictionary = await batch_service.render_sources(sources, active_preset, output_dir, {
+		"force": true,
+		"manifest": true,
+		"manifest_path": output_dir.path_join("manifest.json"),
+		"override": {},
+	})
+	var summary: Dictionary = result.get("summary", {})
+	var failure_count: int = int(summary.get("failed", 0))
+	var warning_count: int = int(summary.get("warnings", 0))
+	batch_panel.set_progress(sources.size(), sources.size(), warning_count, failure_count)
+	for render in result.get("renders", []):
+		if str(render.get("source", "")) == active_source and bool(result.get("success", false)):
+			source_browser.set_thumbnail(active_source, preview_display.get_base_texture())
+			break
 	bottom_tray.expand_tab("batch")
-	_set_status("Batch complete — %d/%d" % [success_count, sources.size()])
+	_set_status("Batch complete — %d/%d" % [int(summary.get("success", 0)), sources.size()])
 
 func _on_variant_selected(index: int) -> void:
 	if active_source.is_empty():
@@ -1331,14 +1356,23 @@ func _wait_for_preview_result(timeout_ms: int) -> Dictionary:
 	return last_preview_result.duplicate(true)
 
 func _export_current() -> void:
+	if sidecar_invalid:
+		_set_status("Cannot export — sidecar is invalid.")
+		return
 	if active_source.is_empty() or active_preset == null:
 		_set_status("Choose a source before exporting.")
 		return
+	var settings: Dictionary = _pending_export_settings
+	var overwrite: bool = true if settings.is_empty() else bool(settings.get("overwrite", false))
+	var export_override: Dictionary = build_export_override(active_override, settings if not settings.is_empty() else _export_defaults())
 	var output_dir: String = ProjectSettings.globalize_path(export_destination)
 	IconStudioFileUtil.ensure_directory(output_dir)
 	var output_path: String = output_dir.path_join("%s_%s.%s" % [IconStudioFileUtil.source_name(active_source), active_preset.get_id(), export_format])
+	if not overwrite and FileAccess.file_exists(output_path):
+		_set_status("Export skipped — output exists.")
+		return
 	_set_status("Exporting…")
-	var result: Dictionary = await render_service.render(active_source, active_preset, active_override, output_path, true)
+	var result: Dictionary = await render_service.render(active_source, active_preset, export_override, output_path, overwrite or settings.is_empty())
 	if not bool(result.get("success", false)):
 		_set_status("Export failed — %s" % str(result.get("error", {}).get("message", "Unknown error")))
 		return
@@ -1346,6 +1380,9 @@ func _export_current() -> void:
 
 func _save_override() -> void:
 	if active_source.is_empty():
+		return
+	if sidecar_invalid:
+		_set_status("Cannot save sidecar — current sidecar is invalid. Fix the file first.")
 		return
 	var result: Dictionary = override_service.save_for_source(active_source, active_override)
 	_set_status("Saved sidecar" if bool(result.get("success", false)) else "Could not save sidecar")

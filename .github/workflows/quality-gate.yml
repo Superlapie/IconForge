@@ -1,0 +1,31 @@
+name: quality-gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install display and Python
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libx11-6 libgl1 python3 unzip curl
+
+      - name: Install Godot 4.7.2
+        run: |
+          mkdir -p .tools/godot
+          curl -fsSL -o /tmp/godot.zip https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          unzip -o /tmp/godot.zip -d .tools/godot
+          chmod +x .tools/godot/Godot_v4.7.2-stable_linux.x86_64
+
+      - name: Run quality gate
+        env:
+          ICONSTUDIO_GODOT: ${{ github.workspace }}/.tools/godot/Godot_v4.7.2-stable_linux.x86_64
+        run: ./scripts/quality-gate

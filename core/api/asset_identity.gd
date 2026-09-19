@@ -21,7 +21,7 @@ static func resolve(asset: String, source_path: String, workspace_root: String, 
 	var identity_basis: String = _workspace_relative(source_path, workspace_root)
 	if not normalized_source.begins_with(root + "/"):
 		identity_basis = normalized_source
-	var path_hash: String = identity_basis.sha256_text().substr(0, 8)
+	var path_hash: String = identity_basis.sha256_text().substr(0, 16)
 	return {
 		"success": true,
 		"asset_id": "%s__%s" % [stem, path_hash],

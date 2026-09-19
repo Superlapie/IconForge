@@ -51,7 +51,16 @@ func run() -> Dictionary:
 	await _scenario_aggregate_failed()
 	await _scenario_aggregate_partial_and_review()
 	await _scenario_review_queue_workspace()
+	await _scenario_output_lock_contention()
+	await _scenario_aggregate_manifest_write_failure()
+	await _scenario_workspace_exclusive_relative_path()
+	await _scenario_sidecar_value_validation()
+	await _scenario_unknown_ownership_fail_closed()
+	await _scenario_manifest_lookup_prefers_matching_sha()
+	await _scenario_validate_output_provenance()
+	await _scenario_opaque_validation_requires_metadata()
 	IconStudioFileUtil.reset_test_seams()
+	api.manifest_service.reset_test_seams()
 	AssetInspector.reset_inspect_count()
 	return {
 		"success": failures.is_empty(),
@@ -598,7 +607,7 @@ func _scenario_force_collision_protection() -> void:
 	var copy_b: String = dir_b.path_join("beta.gltf")
 	DirAccess.copy_absolute(repo_root.path_join("fixtures/sword.gltf"), copy_a)
 	DirAccess.copy_absolute(repo_root.path_join("fixtures/potion.gltf"), copy_b)
-	var shared_id: String = "shared_output_id"
+	var shared_id: String = "shared_output_id_%d" % Time.get_ticks_usec()
 	var first: Dictionary = await api.execute({
 		"schema_version": 1,
 		"operation": "render_asset",
@@ -782,12 +791,13 @@ func _scenario_aggregate_partial_and_review() -> void:
 	var copy_b: String = dir_b.path_join("challenger.gltf")
 	DirAccess.copy_absolute(repo_root.path_join("fixtures/sword.gltf"), copy_a)
 	DirAccess.copy_absolute(repo_root.path_join("fixtures/potion.gltf"), copy_b)
+	var shared_id: String = "agg_partial_owner_%d" % Time.get_ticks_usec()
 	var owner: Dictionary = await api.execute({
 		"schema_version": 1,
 		"operation": "render_asset",
 		"asset": copy_a,
 		"purpose": "inventory_icon",
-		"asset_id": "agg_partial_owner",
+		"asset_id": shared_id,
 		"force": true,
 	})
 	_assert(bool(owner.get("success", false)), "aggregate partial owner renders")
@@ -795,7 +805,7 @@ func _scenario_aggregate_partial_and_review() -> void:
 		"schema_version": 1,
 		"operation": "render_asset_set",
 		"asset": copy_b,
-		"asset_id": "agg_partial_owner",
+		"asset_id": shared_id,
 		"outputs": ["inventory_icon", "shop_thumbnail"],
 		"force": true,
 	})
@@ -825,6 +835,192 @@ func _scenario_review_queue_workspace() -> void:
 	var path: String = str(queue.queue_path())
 	_assert(path.begins_with(ws.path_join("generated")), "review queue uses workspace generated root")
 	_assert(FileAccess.file_exists(path), "review queue wrote workspace file")
+
+func _scenario_output_lock_contention() -> void:
+	scenarios_run += 1
+	var OutputLockScript = load("res://core/api/output_lock.gd")
+	var path: String = repo_root.path_join("out/lock_probe_%d.png" % Time.get_ticks_usec())
+	var first_lock: RefCounted = OutputLockScript.new()
+	var first: Dictionary = first_lock.acquire(path, 250)
+	_assert(bool(first.get("success", false)), "first lock acquires")
+	var second_lock: RefCounted = OutputLockScript.new()
+	var second: Dictionary = second_lock.acquire(path, 250)
+	_assert(not bool(second.get("success", true)), "second lock times out")
+	_assert(str(second.get("error", {}).get("code", "")) == "OUTPUT_LOCKED", "second lock code")
+	first_lock.release()
+	var third: Dictionary = second_lock.acquire(path, 250)
+	_assert(bool(third.get("success", false)), "lock available after release")
+	second_lock.release()
+
+func _scenario_aggregate_manifest_write_failure() -> void:
+	scenarios_run += 1
+	api.manifest_service.reset_test_seams()
+	api.manifest_service.test_fail_aggregate_write = true
+	var sword: String = repo_root.path_join("fixtures/sword.gltf")
+	var result: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset_set",
+		"asset": sword,
+		"outputs": ["inventory_icon", "shop_thumbnail"],
+		"asset_id": "agg_write_fail_%d" % Time.get_ticks_usec(),
+		"force": true,
+	})
+	api.manifest_service.reset_test_seams()
+	_assert(not bool(result.get("success", true)), "aggregate write failure is not success")
+	_assert(str(result.get("status", "")) == "failed", "aggregate write failure status")
+	_assert(str(result.get("code", "")) == "WRITE_FAILED", "aggregate write failure code")
+	_assert(str(result.get("manifest", "x")).is_empty(), "aggregate write failure has empty manifest")
+	_assert(bool(result.get("outputs", {}).get("inventory_icon", {}).get("success", false)), "aggregate write failure preserves validated children")
+
+func _scenario_workspace_exclusive_relative_path() -> void:
+	scenarios_run += 1
+	var ws: String = repo_root.path_join("out/ws_exclusive_%d" % Time.get_ticks_usec())
+	DirAccess.make_dir_recursive_absolute(ws)
+	var external_api: RefCounted = ApiServiceScript.new(ws)
+	var missing: Dictionary = await external_api.execute({
+		"schema_version": 1,
+		"operation": "inspect_asset",
+		"asset": "fixtures/sword.gltf",
+	})
+	_assert(not bool(missing.get("success", true)), "workspace relative path does not fall back to repo")
+	_assert(str(missing.get("code", "")) == "SOURCE_NOT_FOUND", "workspace exclusive missing source code")
+	var explicit: Dictionary = await external_api.execute({
+		"schema_version": 1,
+		"operation": "inspect_asset",
+		"asset": "res://fixtures/sword.gltf",
+	})
+	_assert(bool(explicit.get("success", false)), "res:// source still resolves from external workspace")
+
+func _scenario_sidecar_value_validation() -> void:
+	scenarios_run += 1
+	_assert(not overrides.validate({"camera": {"fov": "banana"}}).is_empty(), "camera fov string rejected")
+	_assert(not overrides.validate({"camera": {"orientation_strategy": "super_epic_zoom_mode"}}).is_empty(), "unknown orientation strategy rejected")
+	_assert(not overrides.validate({"environment": {"background": 9217}}).is_empty(), "numeric environment background rejected")
+	_assert(not overrides.validate({"width": 99999}).is_empty(), "grotesque width rejected")
+	_assert(not overrides.validate({"lighting": {"ambient_energy": 99}}).is_empty(), "lighting energy out of range rejected")
+	var temp_dir: String = repo_root.path_join("out/sidecar_value_%d" % Time.get_ticks_usec())
+	DirAccess.make_dir_recursive_absolute(temp_dir)
+	var sword: String = temp_dir.path_join("value.gltf")
+	DirAccess.copy_absolute(repo_root.path_join("fixtures/sword.gltf"), sword)
+	IconStudioFileUtil.write_json_atomic(overrides.sidecar_path(sword), {"camera": {"fov": "banana"}})
+	var result: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": sword,
+		"purpose": "inventory_icon",
+		"force": true,
+	})
+	_assert(not bool(result.get("success", true)), "sidecar value error blocks render")
+	_assert(str(result.get("code", "")) == "OVERRIDE_INVALID", "sidecar value error code")
+
+func _scenario_unknown_ownership_fail_closed() -> void:
+	scenarios_run += 1
+	var dir_a: String = repo_root.path_join("out/owner_unknown_a_%d" % Time.get_ticks_usec())
+	var dir_b: String = repo_root.path_join("out/owner_unknown_b_%d" % Time.get_ticks_usec())
+	DirAccess.make_dir_recursive_absolute(dir_a)
+	DirAccess.make_dir_recursive_absolute(dir_b)
+	var copy_a: String = dir_a.path_join("alpha.gltf")
+	var copy_b: String = dir_b.path_join("beta.gltf")
+	DirAccess.copy_absolute(repo_root.path_join("fixtures/sword.gltf"), copy_a)
+	DirAccess.copy_absolute(repo_root.path_join("fixtures/potion.gltf"), copy_b)
+	var shared_id: String = "unknown_owner_%d" % Time.get_ticks_usec()
+	var first: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": copy_a,
+		"purpose": "inventory_icon",
+		"asset_id": shared_id,
+		"force": true,
+	})
+	_assert(bool(first.get("success", false)), "unknown ownership first render")
+	var output_path: String = str(first["output"]["path"])
+	var owner_path: String = "%s.owner.json" % output_path
+	if FileAccess.file_exists(owner_path):
+		DirAccess.remove_absolute(owner_path)
+	var second: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": copy_b,
+		"purpose": "inventory_icon",
+		"asset_id": shared_id,
+		"force": true,
+	})
+	_assert(not bool(second.get("success", true)), "unknown ownership blocks different source")
+	_assert(str(second.get("code", "")) == "OUTPUT_OWNERSHIP_UNKNOWN", "unknown ownership code")
+
+func _scenario_manifest_lookup_prefers_matching_sha() -> void:
+	scenarios_run += 1
+	var sword: String = repo_root.path_join("fixtures/sword.gltf")
+	var render: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": sword,
+		"purpose": "neutral_thumbnail",
+		"asset_id": "manifest_sha_%d" % Time.get_ticks_usec(),
+		"force": true,
+	})
+	_assert(bool(render.get("success", false)), "manifest sha lookup first render")
+	var output_path: String = str(render["output"]["path"])
+	var current_hash: String = str(render["output"]["sha256"])
+	var decoy_path: String = api.manifest_service.manifests_dir().path_join("0000-decoy.json")
+	IconStudioFileUtil.write_json_atomic(decoy_path, {
+		"job_id": "0000-decoy",
+		"generated_at": "9999-01-01T00:00:00Z",
+		"output": {"path": output_path, "sha256": "deadbeef"},
+		"quality": {"metrics": {"has_silhouette": true, "occupancy": 0.01, "clipped": false}},
+		"source": sword,
+		"purpose": "neutral_thumbnail",
+	})
+	var found: Dictionary = api.manifest_service.find_manifest_by_output_path(output_path)
+	_assert(str(found.get("output", {}).get("sha256", "")) == current_hash, "manifest lookup uses current output sha")
+
+func _scenario_validate_output_provenance() -> void:
+	scenarios_run += 1
+	var sword: String = repo_root.path_join("fixtures/sword.gltf")
+	var potion: String = repo_root.path_join("fixtures/potion.gltf")
+	var render: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": sword,
+		"purpose": "inventory_icon",
+		"asset_id": "provenance_%d" % Time.get_ticks_usec(),
+		"force": true,
+	})
+	_assert(bool(render.get("success", false)), "provenance render")
+	var mismatched: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "validate_output",
+		"asset": potion,
+		"output": str(render["output"]["path"]),
+		"purpose": "inventory_icon",
+	})
+	_assert(not bool(mismatched.get("success", true)), "validate_output rejects other asset")
+	_assert(str(mismatched.get("code", "")) == "MANIFEST_MISMATCH", "validate_output provenance code")
+	var matched: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "validate_output",
+		"asset": sword,
+		"output": str(render["output"]["path"]),
+		"purpose": "inventory_icon",
+	})
+	_assert(bool(matched.get("success", false)), "validate_output accepts matching asset")
+	_assert(bool(matched.get("provenance_verified", false)), "validate_output provenance verified")
+
+func _scenario_opaque_validation_requires_metadata() -> void:
+	scenarios_run += 1
+	var image: Image = Image.create(256, 256, false, Image.FORMAT_RGBA8)
+	image.fill(Color(0.1, 0.1, 0.2, 1.0))
+	var path: String = repo_root.path_join("out/opaque_no_manifest_%d.png" % Time.get_ticks_usec())
+	image.save_png(path)
+	var result: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "validate_output",
+		"asset": repo_root.path_join("fixtures/sword.gltf"),
+		"output": path,
+		"purpose": "npc_portrait",
+	})
+	_assert(not bool(result.get("success", true)), "opaque image without manifest fails")
+	_assert(str(result.get("code", "")) == "VALIDATION_METADATA_REQUIRED", "opaque image without manifest code")
 
 func _assert(condition: bool, label: String) -> void:
 	if condition:

@@ -13,7 +13,7 @@
 
 Transport: `api --request FILE --json` (or the official [examples/enigma_client.py](examples/enigma_client.py) wrapper).
 
-Workspace: set `ICONSTUDIO_WORKSPACE_ROOT` or pass `--workspace-root` so generated artifacts land in the caller project (not only this repository).
+Workspace: set `ICONSTUDIO_WORKSPACE_ROOT` or pass `--workspace-root` so generated artifacts land in the caller project (not only this repository). Relative asset paths are workspace-exclusive; use `res://` only for intentional tool-repository resources.
 
 ### B. Repository maintainer (humans and authorized debug tooling)
 

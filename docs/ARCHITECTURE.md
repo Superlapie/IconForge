@@ -17,7 +17,8 @@ FramingService       geometric orientation, AABB framing, correction math
 RenderService        temporary Godot scene, camera, lights, capture, export
 ImageProcessor       static fit, background, color, outline, glow, shadow
 QualityService       alpha/resolution/clipping/occupancy checks
-CacheService         content-addressed-ish render cache index
+OutputLock           cross-process exclusive lease around output commit
+ManifestService      production manifests, ownership records, output index
 BatchService         discovery, naming, isolation, progress/result manifest
 IconStudioCli        transport over ApiService + legacy expert commands
 StudioUi             human-facing controls over the same services

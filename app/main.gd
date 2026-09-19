@@ -4,8 +4,6 @@ const IconStudioCliScript = preload("res://cli/cli_app.gd")
 const StudioUiScript = preload("res://app/studio_ui.gd")
 const TestRunnerScript = preload("res://tests/test_runner.gd")
 
-const TOOL_VERSION: String = "0.1.0"
-
 func _ready() -> void:
 	var args: Array[String] = []
 	var user_args: PackedStringArray = OS.get_cmdline_user_args()

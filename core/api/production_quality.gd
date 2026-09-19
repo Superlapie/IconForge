@@ -29,9 +29,9 @@ func validate_output(path: String, purpose_def: Dictionary, preset: PresetDefini
 		if image.load(path) == OK:
 			metrics = ImageProcessor.new().silhouette_metrics(image)
 
-	var has_framing_metrics: bool = bool(metrics.get("has_silhouette", false))
+	var occupancy: float = float(metrics.get("occupancy", -1.0))
+	var has_framing_metrics: bool = bool(metrics.get("has_silhouette", false)) and occupancy >= 0.0
 	if has_framing_metrics:
-		var occupancy: float = float(metrics.get("occupancy", 0.0))
 		if bool(metrics.get("clipped", false)):
 			errors.append(_issue("OUTPUT_CLIPPED", "Silhouette touches the image border after bounded correction.", path))
 		if occupancy < occupancy_min:
@@ -40,8 +40,13 @@ func validate_output(path: String, purpose_def: Dictionary, preset: PresetDefini
 			errors.append(_issue("OCCUPANCY_HIGH", "Occupancy %.3f exceeds purpose maximum %.3f." % [occupancy, occupancy_max], path))
 	elif analyze_alpha:
 		errors.append(_issue("OUTPUT_EMPTY", "Output contains no visible silhouette.", path))
-	elif frame_metrics.is_empty():
-		warnings.append(_issue("VALIDATION_METADATA_REQUIRED", "Framing occupancy was not inferred from an opaque final image. Use the production manifest metrics.", path))
+	else:
+		errors.append(_issue("VALIDATION_METADATA_REQUIRED", "Framing occupancy was not inferred from an opaque final image. Use the production manifest metrics.", path))
+
+	if not analyze_alpha and FileAccess.file_exists(path):
+		var opaque_error: Dictionary = _opaque_background_issue(path)
+		if not opaque_error.is_empty():
+			errors.append(opaque_error)
 
 	var primary_code: String = ""
 	if not errors.is_empty():
@@ -62,6 +67,21 @@ func validate_output(path: String, purpose_def: Dictionary, preset: PresetDefini
 func _mapped_issue(raw_error: Dictionary) -> Dictionary:
 	var mapped: Dictionary = _Mapper.map_error(raw_error)
 	return _issue(str(mapped.get("code", "QUALITY_FAILED")), str(raw_error.get("message", "Validation failed.")), str(raw_error.get("path", "")))
+
+func _opaque_background_issue(path: String) -> Dictionary:
+	var image: Image = Image.new()
+	if image.load(path) != OK:
+		return {}
+	var samples: Array[Vector2i] = [
+		Vector2i(0, 0),
+		Vector2i(image.get_width() - 1, 0),
+		Vector2i(0, image.get_height() - 1),
+		Vector2i(image.get_width() - 1, image.get_height() - 1),
+	]
+	for sample in samples:
+		if image.get_pixelv(sample).a < 0.95:
+			return _issue("ALPHA_INVALID", "Opaque purpose output does not have an opaque background.", path)
+	return {}
 
 func _issue(code: String, message: String, path: String) -> Dictionary:
 	return {"code": code, "message": message, "path": path, "recommended_action": _ErrorCodes.recommended_action(code)}

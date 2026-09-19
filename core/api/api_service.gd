@@ -15,6 +15,7 @@ const _ErrorCodes = preload("res://core/api/error_codes.gd")
 const _JobIdentity = preload("res://core/api/job_identity.gd")
 const _Mapper = preload("res://core/api/error_mapper.gd")
 const _Version = preload("res://core/api/icon_studio_version.gd")
+const _OutputLock = preload("res://core/api/output_lock.gd")
 
 ## Canonical machine API dispatcher. All safe-mode operations enter here.
 
@@ -163,15 +164,22 @@ func _render_asset_pipeline(request: Dictionary, safe_mode: bool, shared_context
 	var output_path: String = output_result["path"]
 	IconStudioFileUtil.ensure_directory(output_path)
 
+	var output_lock: RefCounted = _OutputLock.new()
+	var lock_result: Dictionary = output_lock.acquire(output_path)
+	if not bool(lock_result.get("success", false)):
+		return _terminal_failure("render_asset", lock_result.get("error", {}), trace, job_id)
+
 	var collision: Dictionary = _check_output_collision(output_path, source_path)
 	if not collision.is_empty():
+		output_lock.release()
 		return collision
 
 	var cache_hit: Dictionary = _try_cache_hit(output_path, purpose_def, preset, job_id, source_hash, source_identity, asset_id, purpose_id, preset_id, preset_revision, effective_config_hash, hints, force)
 	if not cache_hit.is_empty():
+		output_lock.release()
 		return cache_hit
 
-	var temp_path: String = "%s.pending.%s.png" % [output_path.get_basename(), job_id]
+	var temp_path: String = "%s.pending.%s.%s.%s.png" % [output_path.get_basename(), job_id, str(OS.get_process_id()), str(Time.get_ticks_usec())]
 	var correction_actions: Array = []
 	var max_passes: int = int(purpose_def.get("max_correction_passes", 3))
 	var render_result: Dictionary = await render_service.render(
@@ -183,6 +191,7 @@ func _render_asset_pipeline(request: Dictionary, safe_mode: bool, shared_context
 
 	if not bool(render_result.get("success", false)):
 		_cleanup_temp(temp_path)
+		output_lock.release()
 		var render_err: Dictionary = _mapped_error(render_result.get("error", {"code": "RENDER_FAILED", "message": "Render failed."}))
 		return _handle_render_failure("render_asset", render_err, trace, job_id, source_path, purpose_id, asset_id, preset_id, render_result)
 
@@ -198,6 +207,7 @@ func _render_asset_pipeline(request: Dictionary, safe_mode: bool, shared_context
 
 	if not bool(quality.get("success", false)):
 		_cleanup_temp(temp_path)
+		output_lock.release()
 		return _handle_quality_failure("render_asset", quality, trace, job_id, source_path, source_hash, source_identity, dependency_hashes, purpose_id, asset_id, preset_id, preset_revision, inspection, recipe, hints, effective_override, effective_config_hash, render_result, correction_actions)
 
 	state = RenderState.VALIDATED_OUTPUT
@@ -211,6 +221,7 @@ func _render_asset_pipeline(request: Dictionary, safe_mode: bool, shared_context
 	var commit_result: Dictionary = manifest_service.commit_validated_render(temp_path, output_path, job_id, manifest_payload)
 	if not bool(commit_result.get("success", false)):
 		_cleanup_temp(temp_path)
+		output_lock.release()
 		var commit_err: Dictionary = commit_result.get("error", {"code": "WRITE_FAILED", "message": "Could not commit validated production bundle."})
 		return _Response.failure("render_asset", str(commit_err.get("code", "WRITE_FAILED")), str(commit_err.get("message", "Could not commit validated production bundle.")), {"job_id": job_id, "trace": trace})
 
@@ -219,6 +230,7 @@ func _render_asset_pipeline(request: Dictionary, safe_mode: bool, shared_context
 	var output_sha256: String = str(commit_result.get("output_sha256", ""))
 	var manifest_path: String = str(commit_result.get("path", ""))
 	job_service.store_job_record(job_id, {"job_id": job_id, "operation": "render_asset", "status": "validated", "manifest": manifest_path, "trace": trace})
+	output_lock.release()
 
 	state = RenderState.COMPLETED
 	return _success_render(job_id, asset_id, purpose_id, output_path, output_sha256, preset, preset_id, preset_revision, quality, render_result, correction_actions, manifest_path, trace, false)
@@ -305,10 +317,24 @@ func _render_asset_set(request: Dictionary, safe_mode: bool) -> Dictionary:
 		"status": aggregate_status,
 		"summary": {"total": outputs.size(), "validated": validated_count, "needs_review": review_count, "failed": fail_count},
 	})
-	var aggregate_manifest_path: String = ""
-	if bool(aggregate_manifest_result.get("success", false)):
-		aggregate_manifest_path = str(aggregate_manifest_result.get("path", ""))
-		job_service.store_job_record(aggregate_job_id, {"job_id": aggregate_job_id, "operation": "render_asset_set", "status": aggregate_status, "manifest": aggregate_manifest_path})
+	if not bool(aggregate_manifest_result.get("success", false)):
+		var write_error: Dictionary = aggregate_manifest_result.get("error", {"code": "WRITE_FAILED", "message": "Could not write aggregate production manifest."})
+		return {
+			"schema_version": _Schema.CURRENT_SCHEMA_VERSION,
+			"success": false,
+			"status": "failed",
+			"operation": "render_asset_set",
+			"code": str(write_error.get("code", "WRITE_FAILED")),
+			"message": str(write_error.get("message", "Could not write aggregate production manifest.")),
+			"recommended_action": _ErrorCodes.recommended_action(str(write_error.get("code", "WRITE_FAILED"))),
+			"job_id": aggregate_job_id,
+			"asset_id": asset_id,
+			"manifest": "",
+			"summary": {"total": outputs.size(), "validated": validated_count, "needs_review": review_count, "failed": fail_count},
+			"outputs": child_results,
+		}
+	var aggregate_manifest_path: String = str(aggregate_manifest_result.get("path", ""))
+	job_service.store_job_record(aggregate_job_id, {"job_id": aggregate_job_id, "operation": "render_asset_set", "status": aggregate_status, "manifest": aggregate_manifest_path})
 
 	return {
 		"schema_version": _Schema.CURRENT_SCHEMA_VERSION,
@@ -345,11 +371,27 @@ func _validate_output_operation(request: Dictionary) -> Dictionary:
 	if not FileAccess.file_exists(output_path):
 		output_path = ProjectSettings.globalize_path(output_path) if output_path.begins_with("res://") else output_path
 
+	var output_sha256: String = IconStudioFileUtil.file_hash(output_path) if FileAccess.file_exists(output_path) else ""
+	var source_hash: String = IconStudioFileUtil.file_hash(str(asset_result["path"]))
+	var source_identity: String = str(asset_result.get("source_identity", ""))
 	var frame_metrics: Dictionary = {}
 	var production_manifest: Dictionary = manifest_service.find_manifest_by_output_path(output_path)
+	var provenance_verified: bool = false
 	if not production_manifest.is_empty():
 		var manifest_output_sha: String = str(production_manifest.get("output", {}).get("sha256", ""))
-		if manifest_output_sha.is_empty() or manifest_output_sha == IconStudioFileUtil.file_hash(output_path):
+		var provenance_ok: bool = (
+			str(production_manifest.get("source_identity", "")) == source_identity
+			and str(production_manifest.get("source_hash", "")) == source_hash
+			and str(production_manifest.get("purpose", "")) == purpose_id
+			and (manifest_output_sha.is_empty() or manifest_output_sha == output_sha256)
+		)
+		if not provenance_ok:
+			return _Response.failure("validate_output", "MANIFEST_MISMATCH", "Production manifest does not match the supplied asset, purpose, and output.", {
+				"provenance_verified": false,
+				"manifest": production_manifest.get("job_id", ""),
+			})
+		provenance_verified = true
+		if manifest_output_sha.is_empty() or manifest_output_sha == output_sha256:
 			frame_metrics = production_manifest.get("quality", {}).get("metrics", {})
 	var quality: Dictionary = production_quality.validate_output(output_path, purpose_def, preset, frame_metrics)
 	if bool(quality.get("success", false)):
@@ -358,10 +400,14 @@ func _validate_output_operation(request: Dictionary) -> Dictionary:
 			"purpose": purpose_id,
 			"recipe": {"id": recipe["preset_id"], "revision": recipe["preset_revision"]},
 			"quality": quality,
+			"provenance_verified": provenance_verified,
 		})
 
 	var primary: Dictionary = quality.get("errors", [{}])[0]
-	return _Response.failure("validate_output", str(primary.get("code", "QUALITY_FAILED")), str(primary.get("message", "Validation failed.")), {"quality": quality})
+	return _Response.failure("validate_output", str(primary.get("code", "QUALITY_FAILED")), str(primary.get("message", "Validation failed.")), {
+		"quality": quality,
+		"provenance_verified": provenance_verified,
+	})
 
 func _explain_result(request: Dictionary, safe_mode: bool = true) -> Dictionary:
 	var manifest_data: Dictionary = {}
@@ -445,13 +491,13 @@ func _try_cache_hit(output_path: String, purpose_def: Dictionary, preset: Preset
 func _check_output_collision(output_path: String, source_path: String) -> Dictionary:
 	if not FileAccess.file_exists(output_path):
 		return {}
-	var owned: Dictionary = manifest_service.find_manifest_by_output_path(output_path)
-	if owned.is_empty():
-		return {}
-	var owned_source: String = _normalize_source_path(str(owned.get("source", "")))
+	var ownership: Dictionary = manifest_service.read_ownership(output_path)
+	if ownership.is_empty() or bool(ownership.get("corrupt", false)):
+		return _Response.failure("render_asset", "OUTPUT_OWNERSHIP_UNKNOWN", "Existing output has no trustworthy ownership record.", {"path": output_path})
+	var owned_source: String = _normalize_source_path(str(ownership.get("source", "")))
 	var current_source: String = _normalize_source_path(source_path)
 	if owned_source != current_source:
-		return _Response.failure("render_asset", "ASSET_ID_COLLISION", "Output path is already owned by a different source.", {"path": output_path, "existing_source": owned.get("source", "")})
+		return _Response.failure("render_asset", "ASSET_ID_COLLISION", "Output path is already owned by a different source.", {"path": output_path, "existing_source": ownership.get("source", "")})
 	return {}
 
 func _normalize_source_path(path: String) -> String:

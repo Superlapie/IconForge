@@ -72,13 +72,7 @@ func _resolve_to_absolute(path: String) -> String:
 	if path.is_absolute_path():
 		return _normalize_absolute(path)
 	var trimmed: String = path.trim_prefix("./")
-	var workspace_candidate: String = _normalize_absolute(workspace_root.path_join(trimmed))
-	if FileAccess.file_exists(workspace_candidate):
-		return workspace_candidate
-	var repo_candidate: String = _normalize_absolute(ProjectSettings.globalize_path("res://" + trimmed))
-	if FileAccess.file_exists(repo_candidate):
-		return repo_candidate
-	return workspace_candidate
+	return _normalize_absolute(workspace_root.path_join(trimmed))
 
 func _normalize_absolute(path: String) -> String:
 	if path.begins_with("res://") or path.begins_with("user://"):

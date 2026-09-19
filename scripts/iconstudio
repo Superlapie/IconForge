@@ -2,6 +2,20 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+runtime_error_json() {
+	local message="$1"
+	python3 - "$message" <<'PY'
+import json, sys
+print(json.dumps({
+    "success": False,
+    "status": "failed",
+    "code": "RUNTIME_START_FAILED",
+    "message": sys.argv[1],
+    "recommended_action": "check_runtime_installation",
+}))
+PY
+}
+
 if [[ -n "${ICONSTUDIO_GODOT:-}" ]]; then
 	GODOT_BIN="$ICONSTUDIO_GODOT"
 elif [[ -x "$ROOT/.tools/godot/Godot_v4.7.2-stable_linux.x86_64" ]]; then
@@ -11,21 +25,40 @@ elif command -v godot >/dev/null 2>&1; then
 elif command -v godot4 >/dev/null 2>&1; then
 	GODOT_BIN="$(command -v godot4)"
 else
-	echo "ICONSTUDIO_GODOT_NOT_FOUND: install Godot 4.x or set ICONSTUDIO_GODOT" >&2
+	if [[ " $* " == *" --json "* ]]; then
+		runtime_error_json "ICONSTUDIO_GODOT_NOT_FOUND: install Godot 4.x or set ICONSTUDIO_GODOT"
+	else
+		echo "ICONSTUDIO_GODOT_NOT_FOUND: install Godot 4.x or set ICONSTUDIO_GODOT" >&2
+	fi
 	exit 127
 fi
 
 cd "$ROOT"
 if [[ " $* " == *" --json "* ]]; then
+	stderr_file="$(mktemp)"
+	stdout_file="$(mktemp)"
 	set +e
 	if command -v xvfb-run >/dev/null 2>&1; then
-		xvfb-run -a "$GODOT_BIN" --path "$ROOT" --display-driver x11 --rendering-method gl_compatibility --audio-driver Dummy --disable-vsync -- --cli "$@" 2>/dev/null | awk '/^\{/{print}'
+		xvfb-run -a "$GODOT_BIN" --path "$ROOT" --display-driver x11 --rendering-method gl_compatibility --audio-driver Dummy --disable-vsync -- --cli "$@" 2>"$stderr_file" | awk '/^\{/{print}' >"$stdout_file"
 		status=${PIPESTATUS[0]}
 	else
-		"$GODOT_BIN" --headless --path "$ROOT" --rendering-method gl_compatibility --audio-driver Dummy -- --cli "$@" 2>/dev/null | awk '/^\{/{print}'
+		"$GODOT_BIN" --headless --path "$ROOT" --rendering-method gl_compatibility --audio-driver Dummy -- --cli "$@" 2>"$stderr_file" | awk '/^\{/{print}' >"$stdout_file"
 		status=${PIPESTATUS[0]}
 	fi
 	set -e
+	stdout="$(cat "$stdout_file")"
+	rm -f "$stdout_file"
+	if [[ -z "${stdout// }" ]]; then
+		stderr_text="$(tr '\n' ' ' <"$stderr_file" | head -c 500)"
+		rm -f "$stderr_file"
+		if [[ -z "$stderr_text" ]]; then
+			stderr_text="Icon Studio produced no JSON response (exit ${status:-1})."
+		fi
+		runtime_error_json "$stderr_text"
+		exit "${status:-1}"
+	fi
+	rm -f "$stderr_file"
+	printf '%s\n' "$stdout"
 	exit "$status"
 fi
 if command -v xvfb-run >/dev/null 2>&1; then

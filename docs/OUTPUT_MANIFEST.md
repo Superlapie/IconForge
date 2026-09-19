@@ -13,7 +13,11 @@ Every successful `render_asset` writes a manifest to `<workspace>/generated/mani
 - `inspection_summary`, `resolution_reasons`
 - `correction` history, `quality` metrics (including silhouette metrics for opaque portraits)
 - `output` path, dimensions, and SHA-256
+- adjacent `<output>.owner.json` current-ownership record (source, purpose, job_id, sha256)
+- `generated/output_index.json` current output → job/SHA map
 - `tool_version`, `cache_hit`, `trace`
+
+Manifest lookup for an output uses the current ownership record and the manifest whose output SHA matches the PNG on disk — not the first historical job that happened to mention the path.
 
 `render_asset_set` also writes an aggregate manifest with `child_job_ids`, `children`, and `summary`.
 

@@ -46,6 +46,9 @@ const CODES: Dictionary = {
 	"OUTPUT_EXISTS": {"recommended_action": "retry_same_request", "status": "failed"},
 	"OVERRIDE_INVALID": {"recommended_action": "fix_human_sidecar", "status": "failed"},
 	"VALIDATION_METADATA_REQUIRED": {"recommended_action": "use_production_manifest", "status": "failed"},
+	"OUTPUT_LOCKED": {"recommended_action": "retry_same_request", "status": "failed"},
+	"OUTPUT_OWNERSHIP_UNKNOWN": {"recommended_action": "provide_unique_asset_id", "status": "failed"},
+	"RUNTIME_START_FAILED": {"recommended_action": "check_runtime_installation", "status": "failed"},
 }
 
 static func recommended_action(code: String) -> String:

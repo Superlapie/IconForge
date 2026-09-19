@@ -1,7 +1,7 @@
 extends RefCounted
 class_name CacheService
 
-const TOOL_VERSION: String = "0.1.0"
+const _Version = preload("res://core/api/icon_studio_version.gd")
 const INDEX_PATH: String = "user://iconstudio/cache.json"
 
 var _entries: Dictionary = {}
@@ -17,7 +17,7 @@ func build_key(source_path: String, preset: PresetDefinition, override: Dictiona
 		if FileAccess.file_exists(dependency_path):
 			dependency_hashes.append("%s=%s" % [dependency_path, IconStudioFileUtil.file_hash(dependency_path)])
 	dependency_hashes.sort()
-	var payload: String = "%s\n%s\n%s\n%s\n%s" % [source_hash, "\n".join(dependency_hashes), preset.to_canonical_json(), JSON.stringify(override), TOOL_VERSION]
+	var payload: String = "%s\n%s\n%s\n%s\n%s" % [source_hash, "\n".join(dependency_hashes), preset.to_canonical_json(), JSON.stringify(override), _Version.VERSION]
 	return payload.sha256_text()
 
 func lookup(key: String, output_path: String, force: bool = false) -> Dictionary:
@@ -33,7 +33,7 @@ func store(key: String, source_path: String, output_path: String, preset_id: Str
 		"source": source_path,
 		"output": output_path,
 		"preset": preset_id,
-		"tool_version": TOOL_VERSION,
+		"tool_version": _Version.VERSION,
 		"metrics": metrics,
 		"stored_at": Time.get_datetime_string_from_system(true)
 	}

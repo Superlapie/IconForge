@@ -10,6 +10,7 @@ var passed: Array = []
 func run() -> Dictionary:
 	await _test_preset_contract()
 	_test_override_contract()
+	_test_export_override_isolation()
 	_test_lighting_contract()
 	_test_framing_contract()
 	_test_preview_camera_contract()
@@ -17,6 +18,7 @@ func run() -> Dictionary:
 	_test_file_collection_contract()
 	_test_inspection_contract()
 	await _test_fixture_render()
+	await _test_batch_unique_outputs()
 	await _test_api_contract()
 	return {"success": failures.is_empty(), "passed": passed, "failures": failures, "summary": {"passed": passed.size(), "failed": failures.size()}}
 
@@ -54,7 +56,53 @@ func _test_override_contract() -> void:
 	_assert(not service.validate({"composition": {"bogus": 1}}).is_empty(), "unknown nested object field is rejected")
 	_assert(not service.validate({"lighting": {"key": {"angle": [0.0, "bad", 0.0]}}}).is_empty(), "invalid lighting angle is rejected")
 	_assert(not service.validate({"lighting": "studio"}).is_empty(), "malformed lighting type is rejected")
+	_assert(not service.validate({"camera": {"fov": "banana"}}).is_empty(), "camera fov string is rejected")
+	_assert(not service.validate({"camera": {"orientation_strategy": "super_epic_zoom_mode"}}).is_empty(), "unknown orientation strategy is rejected")
+	_assert(not service.validate({"environment": {"background": 9217}}).is_empty(), "non-enum environment background is rejected")
+	_assert(not service.validate({"width": 99999}).is_empty(), "out-of-range width is rejected")
 	_assert(OverrideService.lighting_schema().has("light_keys"), "canonical lighting schema is defined")
+
+func _test_export_override_isolation() -> void:
+	var base: Dictionary = {"yaw": 12.0, "occupancy": 0.8}
+	var settings: Dictionary = {"width": 512, "height": 512, "supersampling": 4, "transparent": false, "overwrite": false}
+	var export_override: Dictionary = StudioUi.build_export_override(base, settings)
+	_assert(not base.has("supersampling"), "export helper does not mutate asset override")
+	_assert(int(export_override.get("supersampling", 0)) == 4, "export helper applies supersampling ephemerally")
+	_assert(str(export_override.get("background", "")) == "gradient", "export helper applies opaque background")
+	_assert(not OverrideService.new().validate(export_override).is_empty(), "export-only supersampling cannot be saved as sidecar")
+	_assert(OverrideService.new().validate(base).is_empty(), "asset override remains sidecar-valid after export helper")
+
+func _test_batch_unique_outputs() -> void:
+	var service: PresetService = PresetService.new()
+	service.load_all()
+	var preset: PresetDefinition = service.get_preset("weapon")
+	if preset == null:
+		_assert(false, "weapon preset exists for batch unique outputs")
+		return
+	var stamp: int = Time.get_ticks_usec()
+	var dir_a: String = ProjectSettings.globalize_path("res://out/batch_unique_a_%d" % stamp)
+	var dir_b: String = ProjectSettings.globalize_path("res://out/batch_unique_b_%d" % stamp)
+	var output_dir: String = ProjectSettings.globalize_path("res://out/batch_unique_out_%d" % stamp)
+	DirAccess.make_dir_recursive_absolute(dir_a)
+	DirAccess.make_dir_recursive_absolute(dir_b)
+	DirAccess.make_dir_recursive_absolute(output_dir)
+	var source_a: String = dir_a.path_join("item.gltf")
+	var source_b: String = dir_b.path_join("item.gltf")
+	DirAccess.copy_absolute(ProjectSettings.globalize_path("res://fixtures/sword.gltf"), source_a)
+	DirAccess.copy_absolute(ProjectSettings.globalize_path("res://fixtures/potion.gltf"), source_b)
+	var result: Dictionary = await BatchService.new().render_sources(
+		[source_a, source_b],
+		preset,
+		output_dir,
+		{"force": true, "manifest": false, "override": {}},
+	)
+	_assert(bool(result.get("success", false)), "same-basename batch succeeds")
+	var renders: Array = result.get("renders", [])
+	_assert(renders.size() == 2, "same-basename batch has two outputs")
+	if renders.size() == 2:
+		_assert(str(renders[0].get("output", "")) != str(renders[1].get("output", "")), "same-basename batch uses unique output paths")
+		_assert(FileAccess.file_exists(str(renders[0].get("output", ""))), "first same-basename output exists")
+		_assert(FileAccess.file_exists(str(renders[1].get("output", ""))), "second same-basename output exists")
 
 func _test_framing_contract() -> void:
 	var service: FramingService = FramingService.new()
