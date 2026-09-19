@@ -3,6 +3,7 @@ class_name RenderService
 
 const MAX_CORRECTION_PASSES: int = 5
 const AssetLoaderScript = preload("res://core/services/asset_loader.gd")
+const RenderStageScript = preload("res://core/services/render_stage.gd")
 
 var inspector: AssetInspector = AssetInspector.new()
 var framing: FramingService = FramingService.new()
@@ -12,6 +13,7 @@ var overrides: OverrideService = OverrideService.new()
 var cache: CacheService = CacheService.new()
 var lighting: LightingRigService = LightingRigService.new()
 var loader: RefCounted = AssetLoaderScript.new()
+var stage_builder: RenderStageScript = RenderStageScript.new()
 
 func render(source_path: String, preset: PresetDefinition, override: Dictionary = {}, output_path: String = "", force: bool = false) -> Dictionary:
 	var inspection: Dictionary = inspector.inspect(source_path)
@@ -154,11 +156,11 @@ func _render_3d(source_path: String, inspection: Dictionary, preset: PresetDefin
 	var tree: SceneTree = Engine.get_main_loop() as SceneTree
 	if tree == null:
 		return {"success": false, "source": source_path, "error": {"code": "RENDER_NO_SCENE_TREE", "message": "Godot scene tree is unavailable for 3D rendering."}}
-	var loaded: Dictionary = loader.load_packed_scene(source_path)
+	var loaded: Dictionary = stage_builder.load_scene(source_path)
 	if not bool(loaded.get("success", false)):
 		return loaded
 	var packed_scene: PackedScene = loaded["packed_scene"]
-	var params: Dictionary = framing.resolve_camera(preset, inspection, override)
+	var params: Dictionary = stage_builder.resolve_params(preset, inspection, override)
 	var is_perspective: bool = str(params.get("projection", "orthographic")) == "perspective"
 	var current_size: float = float(params["distance"] if is_perspective else params["orthographic_size"])
 	var min_zoom: float = float(preset.data.get("camera", {}).get("min_zoom", 0.1))
@@ -194,68 +196,20 @@ func _render_3d(source_path: String, inspection: Dictionary, preset: PresetDefin
 func _render_3d_frame(tree: SceneTree, packed_scene: PackedScene, inspection: Dictionary, preset: PresetDefinition, params: Dictionary, ortho_size: float) -> Dictionary:
 	var viewport: SubViewport = SubViewport.new()
 	var render_size: Vector2i = _resolution(preset) * int(preset.data.get("supersampling", 1))
-	viewport.size = render_size
-	viewport.transparent_bg = true
-	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	viewport.msaa_3d = Viewport.MSAA_4X
+	stage_builder.configure_viewport(viewport, render_size, Viewport.MSAA_4X)
 	tree.root.add_child(viewport)
 	var stage: Node3D = Node3D.new()
 	stage.name = "RenderStage"
 	viewport.add_child(stage)
-	var environment_node: WorldEnvironment = WorldEnvironment.new()
-	var environment: Environment = Environment.new()
-	environment.background_mode = Environment.BG_COLOR
-	environment.background_color = Color(0, 0, 0, 0)
-	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	environment.ambient_light_color = Color(0.72, 0.78, 0.92, 1.0)
-	environment.ambient_light_energy = float(preset.data.get("lighting", {}).get("ambient_energy", 0.45))
-	environment_node.environment = environment
-	stage.add_child(environment_node)
-	_add_lights(stage, lighting.resolve(preset.data.get("lighting", {})))
-	var object: Node3D = packed_scene.instantiate() as Node3D
-	if object == null:
-		viewport.queue_free()
-		return {"success": false, "error": {"code": "RENDER_SOURCE_INSTANTIATE_FAILED", "message": "Godot could not instantiate the imported 3D scene."}}
-	object.position = -_array_to_vector(inspection.get("center", [0.0, 0.0, 0.0]))
-	object.rotation_degrees = params["orientation"]
-	object.scale = Vector3.ONE * float(params.get("scale", 1.0))
-	stage.add_child(object)
-	var camera: Camera3D = Camera3D.new()
-	camera.name = "StudioCamera"
-	camera.current = true
-	camera.near = 0.01
-	camera.far = 10000.0
-	var original_center: Vector3 = _array_to_vector(inspection.get("center", [0.0, 0.0, 0.0]))
-	var target: Vector3 = params["target"] - original_center
-	var projection: String = str(params.get("projection", "orthographic"))
-	if projection == "perspective":
-		camera.projection = Camera3D.PROJECTION_PERSPECTIVE
-		camera.fov = float(params.get("fov", 34.0))
-		camera.position = target + Vector3(0.0, 0.0, ortho_size)
-	else:
-		camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-		camera.size = ortho_size
-		camera.position = target + Vector3(0.0, 0.0, maxf(float(params.get("radius", 1.0)) * 4.0, 2.0))
-	stage.add_child(camera)
-	camera.look_at(target, Vector3.UP)
+	var built: Dictionary = stage_builder.populate_stage(stage, packed_scene, inspection, preset, params, ortho_size, {})
+	if not bool(built.get("success", false)):
+		viewport.free()
+		return built
 	await tree.process_frame
 	await tree.process_frame
-	RenderingServer.force_draw()
-	await tree.process_frame
-	var image: Image = viewport.get_texture().get_image()
+	var image: Image = stage_builder.capture_viewport_image(viewport)
 	viewport.free()
 	return {"success": true, "image": image}
-
-func _add_lights(stage: Node3D, lighting: Dictionary) -> void:
-	for type in ["key", "fill", "rim"]:
-		var definition: Dictionary = lighting.get(type, {})
-		var light: DirectionalLight3D = DirectionalLight3D.new()
-		light.name = "%sLight" % type.capitalize()
-		light.rotation_degrees = _array_to_vector(definition.get("angle", [0.0, 0.0, 0.0]))
-		light.light_energy = float(definition.get("intensity", 0.5))
-		light.light_color = _color_from_array(definition.get("color", [1.0, 1.0, 1.0]))
-		light.shadow_enabled = bool(definition.get("shadow", false))
-		stage.add_child(light)
 
 func _save_png_atomic(image: Image, path: String) -> Error:
 	var directory_error: Error = IconStudioFileUtil.ensure_directory(path)

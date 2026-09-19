@@ -20,6 +20,15 @@ func _ready() -> void:
 		print(JSON.stringify(test_result))
 		get_tree().quit(0 if bool(test_result.get("success", false)) else 1)
 		return
+	if args.has("--gui-interaction-test"):
+		var interaction_gui: Control = StudioUiScript.new()
+		add_child(interaction_gui)
+		await get_tree().process_frame
+		var interaction_source: String = _argument_value(args, "--source", "")
+		var interaction_result: Dictionary = await interaction_gui.run_interaction_e2e(interaction_source)
+		print(JSON.stringify(interaction_result))
+		get_tree().quit(0 if bool(interaction_result.get("success", false)) else 1)
+		return
 	if args.has("--gui-test"):
 		var gui: Control = StudioUiScript.new()
 		add_child(gui)

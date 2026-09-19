@@ -1,6 +1,8 @@
 extends RefCounted
 class_name IconStudioTestRunner
 
+const PreviewCameraScript = preload("res://core/services/preview_camera.gd")
+
 var failures: Array = []
 var passed: Array = []
 
@@ -9,6 +11,7 @@ func run() -> Dictionary:
 	_test_override_contract()
 	_test_lighting_contract()
 	_test_framing_contract()
+	_test_preview_camera_contract()
 	_test_image_quality_contract()
 	_test_file_collection_contract()
 	_test_inspection_contract()
@@ -34,6 +37,8 @@ func _test_override_contract() -> void:
 	_assert(service.validate({"camera": {"min_zoom": 0.02, "max_zoom": 100.0}}).is_empty(), "nested camera zoom override passes")
 	_assert(not service.validate({"occupancy": 1.2}).is_empty(), "invalid occupancy is rejected")
 	_assert(not service.validate({"camera": {"min_zoom": 4.0, "max_zoom": 1.0}}).is_empty(), "invalid nested camera zoom range is rejected")
+	_assert(service.validate({"lighting": {"key": {"angle": [-30.0, 45.0, 0.0]}}}).is_empty(), "lighting angle override passes")
+	_assert(not service.validate({"lighting": {"key": {"angle": [0.0, "bad", 0.0]}}}).is_empty(), "invalid lighting angle is rejected")
 
 func _test_framing_contract() -> void:
 	var service: FramingService = FramingService.new()
@@ -42,6 +47,19 @@ func _test_framing_contract() -> void:
 	_assert(float(params.get("orthographic_size", 0)) > 0.0, "auto framing returns positive camera size")
 	var corrected: float = service.correction_size(2.0, 0.82, 0.42, false, 0.1, 100.0)
 	_assert(corrected < 2.0, "low occupancy produces bounded zoom correction")
+
+func _test_preview_camera_contract() -> void:
+	var preset: PresetDefinition = PresetDefinition.new(PresetDefinition.default_data("preview_camera"))
+	var orbit: Dictionary = PreviewCameraScript.apply_orbit_delta({}, preset, Vector2(10.0, -5.0))
+	var default_pitch: float = float(preset.data.get("camera", {}).get("pitch", -8.0))
+	_assert(is_equal_approx(float(orbit["yaw"]), 10.0 * PreviewCameraScript.YAW_SENSITIVITY), "orbit delta updates yaw")
+	_assert(is_equal_approx(float(orbit["pitch"]), default_pitch + -5.0 * PreviewCameraScript.PITCH_SENSITIVITY), "orbit delta updates pitch")
+	var clamped: Dictionary = PreviewCameraScript.apply_orbit_delta({"pitch": 89.0}, preset, Vector2(0.0, 20.0))
+	_assert(float(clamped["pitch"]) <= 90.0, "orbit pitch is clamped to 90 degrees")
+	var zoom: Dictionary = PreviewCameraScript.apply_zoom_delta({}, preset, 2.0)
+	var expected_occupancy: float = clampf(float(preset.data.get("camera", {}).get("occupancy", 0.82)) + 2.0 * PreviewCameraScript.ZOOM_SENSITIVITY, 0.4, 0.95)
+	_assert(is_equal_approx(float(zoom["occupancy"]), expected_occupancy), "zoom delta updates occupancy")
+	_assert(is_equal_approx(PreviewCameraScript.effective_value({"yaw": 12.0}, preset, "yaw"), 12.0), "effective value prefers override")
 
 func _test_lighting_contract() -> void:
 	var service: LightingRigService = LightingRigService.new()

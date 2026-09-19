@@ -59,6 +59,13 @@ else
 	echo "FAIL  GUI drag/drop E2E"
 fi
 
+if "$ROOT/scripts/gui-interaction-e2e"; then
+	:
+else
+	failed=1
+	echo "FAIL  GUI interaction E2E"
+fi
+
 if [[ "$failed" -eq 0 ]]; then
 	echo "PASS  all quality gates"
 	exit 0

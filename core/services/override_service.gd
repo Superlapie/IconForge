@@ -45,6 +45,24 @@ func validate(override: Dictionary) -> Array:
 					errors.append({"code": "OVERRIDE_CAMERA_VALUE_INVALID", "path": "camera.%s" % key, "message": "%s must be between 0.001 and 100000." % key})
 			if camera.has("min_zoom") and camera.has("max_zoom") and _finite_number(camera["min_zoom"]) and _finite_number(camera["max_zoom"]) and float(camera["min_zoom"]) > float(camera["max_zoom"]):
 				errors.append({"code": "OVERRIDE_CAMERA_ZOOM_RANGE_INVALID", "path": "camera", "message": "camera.min_zoom cannot exceed camera.max_zoom."})
+	if override.has("lighting"):
+		if not (override["lighting"] is Dictionary):
+			errors.append({"code": "OVERRIDE_LIGHTING_INVALID", "path": "lighting", "message": "lighting must be an object."})
+		else:
+			for type in ["key", "fill", "rim"]:
+				if not override["lighting"].has(type):
+					continue
+				if not (override["lighting"][type] is Dictionary):
+					errors.append({"code": "OVERRIDE_LIGHTING_INVALID", "path": "lighting.%s" % type, "message": "%s must be an object." % type})
+					continue
+				var angle: Variant = override["lighting"][type].get("angle", null)
+				if angle != null:
+					if not (angle is Array) or angle.size() < 3:
+						errors.append({"code": "OVERRIDE_LIGHTING_ANGLE_INVALID", "path": "lighting.%s.angle" % type, "message": "angle must be a 3-number array."})
+					else:
+						for index in range(3):
+							if not _finite_number(angle[index]):
+								errors.append({"code": "OVERRIDE_LIGHTING_ANGLE_INVALID", "path": "lighting.%s.angle[%d]" % [type, index], "message": "angle values must be finite numbers."})
 	return errors
 
 func _finite_number(value: Variant) -> bool:
