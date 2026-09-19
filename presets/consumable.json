@@ -1,5 +1,6 @@
 {
 	"schema_version": 1,
+	"preset_revision": 1,
 	"id": "consumable",
 	"display_name": "Consumable",
 	"description": "Centered, slightly elevated studio composition for bottles, food, and scrolls.",

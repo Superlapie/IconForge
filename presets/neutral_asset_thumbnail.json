@@ -1,5 +1,6 @@
 {
 	"schema_version": 1,
+	"preset_revision": 1,
 	"id": "neutral_asset_thumbnail",
 	"display_name": "Neutral Asset Thumbnail",
 	"description": "Safe general-purpose thumbnail for asset browsers and batch smoke tests.",

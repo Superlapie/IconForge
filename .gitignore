@@ -2,6 +2,7 @@
 .tools/
 out/*
 !out/.gitkeep
+generated/
 user://
 *.import
 

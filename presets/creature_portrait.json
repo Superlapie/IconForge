@@ -1,5 +1,6 @@
 {
 	"schema_version": 1,
+	"preset_revision": 1,
 	"id": "creature_portrait",
 	"display_name": "Creature Portrait",
 	"description": "Portrait-biased head or bust framing for creatures and monsters.",

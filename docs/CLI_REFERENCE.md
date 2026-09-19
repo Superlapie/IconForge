@@ -8,7 +8,15 @@ All commands are available through `./scripts/iconstudio`. Add `--json` to recei
 - `4`: batch had both successes and failures.
 - `127`: Godot executable was not found by the wrapper.
 
-## Commands
+## Machine API (recommended for agents)
+
+```bash
+./scripts/iconstudio api --request request.json --json
+```
+
+See [MACHINE_API.md](MACHINE_API.md). Safe-mode agents send semantic requests (`purpose`, not `yaw`/`fov`). Expert mode: add `--expert`.
+
+## Legacy / expert commands
 
 ```text
 inspect SOURCE [--json]

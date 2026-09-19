@@ -38,13 +38,20 @@ GUI:
 ./scripts/launch-gui
 ```
 
-CLI:
+Machine API (recommended for AI agents):
+
+```bash
+./scripts/iconstudio api --request examples/render_inventory.json --json
+```
+
+Legacy expert CLI:
 
 ```bash
 ./scripts/iconstudio presets --json
-./scripts/iconstudio inspect fixtures/sword.gltf --json
 ./scripts/iconstudio render fixtures/sword.gltf --preset weapon --output out/sword.png --force --json
 ```
+
+See [docs/MACHINE_API.md](docs/MACHINE_API.md).
 
 The included `scripts/iconstudio` wrapper uses a local Godot binary when present and uses `xvfb-run` for software OpenGL batch rendering on headless Linux machines. Set `ICONSTUDIO_GODOT` to use another Godot 4.x executable.
 

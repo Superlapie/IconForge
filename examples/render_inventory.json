@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "operation": "render_asset",
+  "asset": "fixtures/sword.gltf",
+  "purpose": "inventory_icon"
+}

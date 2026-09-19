@@ -1,5 +1,6 @@
 {
 	"schema_version": 1,
+	"preset_revision": 1,
 	"id": "inventory_item",
 	"display_name": "Inventory Item",
 	"description": "Transparent, restrained three-quarter item render for inventory grids.",

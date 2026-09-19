@@ -1,5 +1,6 @@
 {
 	"schema_version": 1,
+	"preset_revision": 1,
 	"id": "npc_portrait",
 	"display_name": "NPC Portrait",
 	"description": "Readable character portrait composition for dialogue, shops, and quest panels.",

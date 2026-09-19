@@ -1,5 +1,6 @@
 {
 	"schema_version": 1,
+	"preset_revision": 1,
 	"id": "armor",
 	"display_name": "Armor",
 	"description": "Clean three-quarter armor presentation with enough space for silhouette details.",

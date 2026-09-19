@@ -3,8 +3,13 @@
 ## Boundaries
 
 ```text
+ApiService           canonical machine API dispatcher (safe + expert modes)
+PurposeRegistry      semantic purposes → production recipes
+RecipeResolver       deterministic purpose + inspection → preset
+WorkspacePolicy      safe-mode filesystem confinement
+ProductionQuality    authoritative production contract validation
 AssetInspector       source decode/import and geometry metrics
-PresetDefinition     canonical versioned data model
+PresetDefinition     canonical versioned data model (preset_revision)
 PresetService        preset discovery, migration, validation, persistence
 FramingService       geometric orientation, AABB framing, correction math
 RenderService        temporary Godot scene, camera, lights, capture, export
@@ -12,11 +17,11 @@ ImageProcessor       static fit, background, color, outline, glow, shadow
 QualityService       alpha/resolution/clipping/occupancy checks
 CacheService         content-addressed-ish render cache index
 BatchService         discovery, naming, isolation, progress/result manifest
-IconStudioCli        machine-facing command routing and exit codes
+IconStudioCli        transport over ApiService + legacy expert commands
 StudioUi             human-facing controls over the same services
 ```
 
-The GUI and CLI share every source-inspection, preset, render, processing, quality, cache, and manifest behavior. The GUI only supplies interaction state and displays service results.
+The machine API sits **above** core render services. CLI `api` commands and future transports call `ApiService.execute()`. The GUI and legacy CLI expert commands may call `RenderService` directly. All paths share inspection, presets, framing, quality, cache, and manifests.
 
 ## Render lifetime
 

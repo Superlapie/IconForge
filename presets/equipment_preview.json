@@ -1,5 +1,6 @@
 {
 	"schema_version": 1,
+	"preset_revision": 1,
 	"id": "equipment_preview",
 	"display_name": "Equipment Preview",
 	"description": "Larger clean transparent render for item details and equipment panels.",

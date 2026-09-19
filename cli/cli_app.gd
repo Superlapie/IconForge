@@ -13,6 +13,8 @@ var batch_service: BatchService = BatchService.new()
 var quality: QualityService = QualityService.new()
 var compare: CompareService = CompareService.new()
 var override_service: OverrideService = OverrideService.new()
+const ApiServiceScript = preload("res://core/api/api_service.gd")
+var api_service: RefCounted = ApiServiceScript.new()
 
 func run(raw_args: Array[String]) -> int:
 	var args: Array[String] = _clean_args(raw_args)
@@ -43,6 +45,8 @@ func run(raw_args: Array[String]) -> int:
 			return _compare(args)
 		"validate-output", "quality":
 			return _validate_output(args)
+		"api":
+			return await _api(args)
 		_:
 			return _finish(_error("CLI_UNKNOWN_COMMAND", "Unknown command '%s'." % command, {"command": command}), _json_mode(args), EXIT_USAGE)
 
@@ -155,6 +159,41 @@ func _compare(args: Array[String]) -> int:
 		return _finish(_error("CLI_USAGE", "compare requires two image paths.", {}), _json_mode(args), EXIT_USAGE)
 	var result: Dictionary = compare.compare(_path(first), _path(second))
 	return _finish(result, _json_mode(args), EXIT_OK if bool(result.get("success", false)) else EXIT_USAGE)
+
+func _api(args: Array[String]) -> int:
+	var request: Dictionary = {}
+	if _has_flag(args, "--stdin"):
+		var stdin_text: String = ""
+		if FileAccess.file_exists("/dev/stdin"):
+			var stdin_file: FileAccess = FileAccess.open("/dev/stdin", FileAccess.READ)
+			if stdin_file != null:
+				stdin_text = stdin_file.get_as_text()
+				stdin_file.close()
+		if stdin_text.is_empty():
+			return _finish(_error("CLI_USAGE", "api --stdin requires JSON on stdin.", {}), true, EXIT_USAGE)
+		var parsed: Variant = JSON.parse_string(stdin_text)
+		if not parsed is Dictionary:
+			return _finish(_error("INVALID_REQUEST", "stdin did not contain a JSON object.", {}), true, EXIT_USAGE)
+		request = parsed
+	else:
+		var request_path: String = _option(args, "--request", "")
+		if request_path.is_empty():
+			return _finish(_error("CLI_USAGE", "api requires --request FILE or --stdin.", {"usage": "iconstudio api --request request.json --json"}), _json_mode(args), EXIT_USAGE)
+		request = IconStudioFileUtil.read_json(_path(request_path))
+		if request.is_empty():
+			return _finish(_error("INVALID_REQUEST", "Could not read request JSON.", {"path": request_path}), _json_mode(args), EXIT_USAGE)
+	var safe_mode: bool = not _has_flag(args, "--expert")
+	var result: Dictionary = await api_service.execute(request, safe_mode)
+	var exit_code: int = EXIT_OK
+	if not bool(result.get("success", false)):
+		match str(result.get("status", "failed")):
+			"needs_review":
+				exit_code = EXIT_PARTIAL
+			"partial_success":
+				exit_code = EXIT_PARTIAL
+			_:
+				exit_code = EXIT_USAGE if str(result.get("code", "")) in ["INVALID_REQUEST", "UNKNOWN_OPERATION", "UNKNOWN_FIELD", "INVALID_FIELD_TYPE", "UNSUPPORTED_SCHEMA_VERSION"] else EXIT_RENDER
+	return _finish(result, _json_mode(args) or true, exit_code)
 
 func _validate_output(args: Array[String]) -> int:
 	var output: String = _first_positional(args, 1)
@@ -285,7 +324,8 @@ func _help_result() -> Dictionary:
 			"explain": "Describe a preset and supported overrides.",
 			"schema": "Print the self-describing preset schema.",
 			"compare": "Compare two images with deterministic pixel metrics.",
-			"validate-output": "Run resolution, alpha, clipping, and occupancy checks."
+			"validate-output": "Run resolution, alpha, clipping, and occupancy checks.",
+			"api": "Execute a canonical machine API request (--request FILE or --stdin)."
 		},
-		"global_options": ["--json", "--force", "--preset ID", "--output PATH"]
+		"global_options": ["--json", "--force", "--preset ID", "--output PATH", "--request FILE", "--stdin", "--expert"]
 	}

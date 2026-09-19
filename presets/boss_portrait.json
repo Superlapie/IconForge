@@ -1,5 +1,6 @@
 {
 	"schema_version": 1,
+	"preset_revision": 1,
 	"id": "boss_portrait",
 	"display_name": "Boss Portrait",
 	"description": "Dramatic larger-scale portrait treatment with controlled glow and contrast.",

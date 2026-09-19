@@ -6,12 +6,15 @@ Icon Studio converts GLB/glTF models and static images into consistent PNG game 
 
 ## Expected AI workflow
 
-1. Discover intent with `./scripts/iconstudio presets --json`.
-2. Inspect the source with `./scripts/iconstudio inspect SOURCE --json`.
-3. Render with a named preset and explicit output path.
-4. Read the returned `metrics`, `warnings`, `errors`, and `render_passes`.
-5. If framing needs correction, rerender with structured flags or write a source sidecar such as `iron_sword.icon.json`.
-6. Run `validate-output` and keep the output manifest from batch work.
+**Use the semantic machine API** (`docs/MACHINE_API.md`). Agents specify purpose, not renderer internals.
+
+1. Discover with `{"operation":"capabilities"}` or `{"operation":"schema"}` via `./scripts/iconstudio api --stdin --json`.
+2. Render with `{"operation":"render_asset","asset":"...","purpose":"inventory_icon"}`.
+3. Read `status`, `recipe`, `quality`, `manifest`, and `recommended_action` on failure.
+4. For multiple outputs use `render_asset_set`.
+5. Human corrections go in `<source>.icon.json` sidecars; future safe renders inherit them automatically.
+
+Legacy expert CLI (`render --preset weapon --yaw 18`) remains for debugging. Do not teach normal agents to use it.
 
 Machine workflows must use `--json`. JSON is one object per command and contains stable error codes. Human terminal text is only for interactive use.
 

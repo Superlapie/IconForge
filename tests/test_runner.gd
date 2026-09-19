@@ -2,6 +2,7 @@ extends RefCounted
 class_name IconStudioTestRunner
 
 const PreviewCameraScript = preload("res://core/services/preview_camera.gd")
+const ApiTestRunnerScript = preload("res://tests/api_test_runner.gd")
 
 var failures: Array = []
 var passed: Array = []
@@ -16,7 +17,16 @@ func run() -> Dictionary:
 	_test_file_collection_contract()
 	_test_inspection_contract()
 	await _test_fixture_render()
+	await _test_api_contract()
 	return {"success": failures.is_empty(), "passed": passed, "failures": failures, "summary": {"passed": passed.size(), "failed": failures.size()}}
+
+func _test_api_contract() -> void:
+	var api_runner: RefCounted = ApiTestRunnerScript.new()
+	var api_result: Dictionary = await api_runner.run()
+	for label in api_result.get("passed", []):
+		passed.append("api: %s" % label)
+	for label in api_result.get("failures", []):
+		failures.append("api: %s" % label)
 
 func _test_preset_contract() -> void:
 	var service: PresetService = PresetService.new()

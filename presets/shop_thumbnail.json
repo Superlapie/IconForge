@@ -1,5 +1,6 @@
 {
 	"schema_version": 1,
+	"preset_revision": 1,
 	"id": "shop_thumbnail",
 	"display_name": "Shop Thumbnail",
 	"description": "Small-format high-readability render for shop grids and buy lists.",

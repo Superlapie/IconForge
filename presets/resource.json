@@ -1,5 +1,6 @@
 {
 	"schema_version": 1,
+	"preset_revision": 1,
 	"id": "resource",
 	"display_name": "Resource",
 	"description": "Close framing with a strong silhouette for ore, herbs, gems, and crafting materials.",

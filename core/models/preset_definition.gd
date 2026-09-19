@@ -42,6 +42,7 @@ static func normalize(raw: Dictionary) -> Dictionary:
 static func default_data(preset_id: String = "custom") -> Dictionary:
 	return {
 		"schema_version": CURRENT_SCHEMA_VERSION,
+		"preset_revision": 1,
 		"id": preset_id,
 		"display_name": preset_id.replace("_", " ").capitalize(),
 		"description": "Custom Icon Studio render preset.",
@@ -126,6 +127,9 @@ func resolve(override: Dictionary) -> PresetDefinition:
 
 func get_id() -> String:
 	return str(data.get("id", "custom"))
+
+func get_revision() -> int:
+	return int(data.get("preset_revision", 1))
 
 func get_display_name() -> String:
 	return str(data.get("display_name", get_id()))

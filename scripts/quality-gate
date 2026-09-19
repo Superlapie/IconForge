@@ -15,6 +15,25 @@ else
 	echo "FAIL  automated Godot tests"
 fi
 
+API_CAPABILITIES="$ROOT/out/quality_api_capabilities.json"
+API_RENDER="$ROOT/out/quality_api_render.json"
+printf '%s\n' '{"schema_version":1,"operation":"capabilities"}' >"$API_CAPABILITIES"
+printf '%s\n' '{"schema_version":1,"operation":"render_asset","asset":"fixtures/sword.gltf","purpose":"inventory_icon","force":true}' >"$API_RENDER"
+
+if "$CLI" api --request "$API_CAPABILITIES" --json >/dev/null; then
+	:
+else
+	failed=1
+	echo "FAIL  machine API capabilities"
+fi
+
+if "$CLI" api --request "$API_RENDER" --json >/dev/null; then
+	:
+else
+	failed=1
+	echo "FAIL  machine API render_asset"
+fi
+
 for preset in "$ROOT"/presets/*.json; do
 	if "$CLI" validate-preset "$preset" --json >/dev/null; then
 		:

@@ -1,18 +1,33 @@
 # AI workflow
 
-Icon Studio is designed to be driven by a tool-using agent rather than terminal scraping. Use `--json` for every command that will be parsed.
+Icon Studio is designed to be driven by a tool-using agent rather than terminal scraping. **Normal agents should use the semantic machine API** — see [MACHINE_API.md](MACHINE_API.md).
+
+## Recommended: semantic machine API
+
+```bash
+echo '{"schema_version":1,"operation":"capabilities"}' | ./scripts/iconstudio api --stdin --json
+./scripts/iconstudio api --request examples/render_inventory.json --json
+```
+
+```json
+{
+  "schema_version": 1,
+  "operation": "render_asset",
+  "asset": "fixtures/sword.gltf",
+  "purpose": "inventory_icon"
+}
+```
+
+Agents specify **purpose**, not camera/lighting/FOV. Icon Studio inspects, resolves the recipe, renders, validates, and commits.
 
 ## Discover
 
 ```bash
+echo '{"schema_version":1,"operation":"schema"}' | ./scripts/iconstudio api --stdin --json
 ./scripts/iconstudio presets --json
-./scripts/iconstudio schema --json
-./scripts/iconstudio explain inventory_item --json
 ```
 
-The schema returns field types, enum values, valid ranges, and descriptions. The preset listing returns intended use, resolution, projection, and tags.
-
-## Inspect, render, and correct
+## Expert / legacy CLI (debugging and humans)
 
 ```bash
 ./scripts/iconstudio inspect assets/iron_sword.glb --json
