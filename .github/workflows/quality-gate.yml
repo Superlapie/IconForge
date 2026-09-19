@@ -7,25 +7,31 @@ on:
 
 jobs:
   quality-gate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d275a9733297854a # v4.2.2
 
       - name: Install display and Python
         run: |
           sudo apt-get update
           sudo apt-get install -y xvfb libx11-6 libgl1 python3 unzip curl
 
-      - name: Install Godot 4.7.2
+      - name: Install and verify Godot
         run: |
-          mkdir -p .tools/godot
-          curl -fsSL -o /tmp/godot.zip https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
-          unzip -o /tmp/godot.zip -d .tools/godot
-          chmod +x .tools/godot/Godot_v4.7.2-stable_linux.x86_64
+          chmod +x scripts/godot-runtime
+          ICONFORGE_GODOT="$(./scripts/godot-runtime install)"
+          ./scripts/godot-runtime verify
+          echo "ICONFORGE_GODOT=$ICONFORGE_GODOT" >> "$GITHUB_ENV"
 
       - name: Run quality gate
-        env:
-          ICONFORGE_GODOT: ${{ github.workspace }}/.tools/godot/Godot_v4.7.2-stable_linux.x86_64
         run: ./scripts/quality-gate
+
+      - name: Upload CI artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: quality-gate-artifacts
+          path: out/ci-artifacts/quality-gate
+          if-no-files-found: warn

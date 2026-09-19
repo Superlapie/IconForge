@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DEST="${1:-$ROOT/out/ci-artifacts/quality-gate}"
+mkdir -p "$DEST"
+
+copy_if_exists() {
+	local src="$1"
+	local name="$2"
+	if [[ -e "$src" ]]; then
+		cp -a "$src" "$DEST/$name"
+	fi
+}
+
+copy_if_exists "$ROOT/out/quality_api_capabilities.json" "quality_api_capabilities.json"
+copy_if_exists "$ROOT/out/quality_api_render.json" "quality_api_render.json"
+copy_if_exists "$ROOT/out/quality_api_portrait.json" "quality_api_portrait.json"
+copy_if_exists "$ROOT/out/quality_api_cache.json" "quality_api_cache.json"
+copy_if_exists "$ROOT/out/quality_sword.png" "quality_sword.png"
+copy_if_exists "$ROOT/out/quality_batch/manifest.json" "quality_batch_manifest.json"
+copy_if_exists "$ROOT/out/e2e-real" "e2e-real"
+copy_if_exists "$ROOT/out/gui-e2e" "gui-e2e"
+copy_if_exists "$ROOT/out/gui-interaction-e2e" "gui-interaction-e2e"
+
+if [[ -f "$ROOT/out/test-results.json" ]]; then
+	copy_if_exists "$ROOT/out/test-results.json" "test-results.json"
+fi
+
+echo "ci artifacts collected at $DEST"

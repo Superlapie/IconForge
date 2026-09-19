@@ -1,10 +1,16 @@
 extends RefCounted
 class_name ReviewQueue
 
+const _AdvisoryIndex = preload("res://core/util/advisory_index.gd")
+
 ## Immutable per-job review records under generated/reviews/.
-## review_queue.json is an advisory index only; per-job files are authoritative.
+## review_queue.json and generated/index/reviews/ are advisory indexes only.
 
 var workspace_root: String = ""
+static var test_fail_record_write: bool = false
+
+static func reset_test_seams() -> void:
+	test_fail_record_write = false
 
 func _init(root: String = "") -> void:
 	if root.is_empty():
@@ -20,6 +26,16 @@ func record(entry: Dictionary) -> Dictionary:
 	payload["job_id"] = job_id
 	payload["recorded_at"] = Time.get_datetime_string_from_system(true)
 	var path: String = record_path(job_id)
+	if test_fail_record_write:
+		return {
+			"success": false,
+			"path": path,
+			"error": {
+				"code": "WRITE_FAILED",
+				"message": "Could not persist review record.",
+				"path": path,
+			},
+		}
 	var write_error: Error = IconForgeFileUtil.write_json_atomic(path, payload)
 	if write_error != OK:
 		return {
@@ -61,10 +77,6 @@ func queue_path() -> String:
 	return workspace_root.path_join("generated/review_queue.json")
 
 func _update_index(job_id: String, payload: Dictionary) -> void:
-	var index: Dictionary = IconForgeFileUtil.read_json(queue_path())
-	var entries: Array = []
-	if index.has("entries") and index["entries"] is Array:
-		entries = index["entries"]
 	var summary: Dictionary = {
 		"job_id": job_id,
 		"path": record_path(job_id),
@@ -72,6 +84,11 @@ func _update_index(job_id: String, payload: Dictionary) -> void:
 		"purpose": str(payload.get("purpose", "")),
 		"recorded_at": str(payload.get("recorded_at", "")),
 	}
+	_AdvisoryIndex.write_record(workspace_root, "reviews", job_id, summary)
+	var index: Dictionary = IconForgeFileUtil.read_json(queue_path())
+	var entries: Array = []
+	if index.has("entries") and index["entries"] is Array:
+		entries = index["entries"]
 	var replaced: bool = false
 	for item_index in range(entries.size()):
 		var existing: Dictionary = entries[item_index]

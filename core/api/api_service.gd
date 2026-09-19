@@ -691,7 +691,7 @@ func _persist_review_state(review_entry: Dictionary, manifest_payload: Dictionar
 	return {
 		"job_id": job_id,
 		"review_persisted": bool(review_result.get("success", false)) and bool(manifest_result.get("success", false)),
-		"review_path": str(review_result.get("path", "")),
+		"review_path": str(review_result.get("path", "")) if bool(review_result.get("success", false)) else "",
 		"manifest": str(manifest_result.get("path", "")) if bool(manifest_result.get("success", false)) else "",
 		"review_error": review_result.get("error", {}),
 		"manifest_error": manifest_result.get("error", {}),

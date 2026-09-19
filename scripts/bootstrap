@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CLI="$ROOT/scripts/iconforge"
+
+echo "Icon Forge bootstrap"
+echo "===================="
+
+OS_NAME="$(uname -s)"
+echo "os: $OS_NAME"
+
+if [[ "$OS_NAME" == "Linux" ]]; then
+	if ! command -v python3 >/dev/null 2>&1; then
+		echo "FAIL  python3 is required"
+		exit 1
+	fi
+	if ! command -v unzip >/dev/null 2>&1; then
+		echo "FAIL  unzip is required on Linux"
+		exit 1
+	fi
+	if ! command -v curl >/dev/null 2>&1; then
+		echo "FAIL  curl is required on Linux"
+		exit 1
+	fi
+	GODOT_BIN="$("$ROOT/scripts/godot-runtime" install)"
+	echo "godot: $GODOT_BIN"
+	export ICONFORGE_GODOT="$GODOT_BIN"
+elif [[ "$OS_NAME" == "Darwin" ]]; then
+	echo "note: install Godot 4.7.x manually or set ICONFORGE_GODOT"
+	if [[ -z "${ICONFORGE_GODOT:-}" ]]; then
+		echo "WARN  ICONFORGE_GODOT not set; contract tests may fail until configured"
+	fi
+else
+	echo "note: on Windows use scripts/iconforge.ps1 and install Godot 4.7.x"
+fi
+
+mkdir -p "$ROOT/out" "$ROOT/.tools/godot"
+
+if [[ -n "${ICONFORGE_GODOT:-}" ]] || "$ROOT/scripts/godot-runtime" bin >/dev/null 2>&1; then
+	export ICONFORGE_GODOT="${ICONFORGE_GODOT:-$("$ROOT/scripts/godot-runtime" bin)}"
+	echo "smoke: capabilities"
+	printf '%s\n' '{"schema_version":1,"operation":"capabilities"}' | "$CLI" api --stdin --json >/dev/null
+	echo "smoke: contract tests"
+	"$CLI" --contract-test >/dev/null
+	echo "PASS  bootstrap complete"
+	echo
+	echo "Next steps:"
+	echo "  ./scripts/iconforge api --request examples/render_inventory.json --json"
+	echo "  ./scripts/quality-gate            # full Linux proof (rendering + GUI)"
+	echo "  ./scripts/contract-gate           # cross-platform contract proof"
+	echo "  printf '%s\\n' '{\"schema_version\":1,\"operation\":\"capabilities\"}' | ./scripts/iconforge service"
+else
+	echo "WARN  Godot runtime not configured; skipped smoke tests"
+	echo "Set ICONFORGE_GODOT or rerun on Linux to auto-install the pinned runtime."
+fi

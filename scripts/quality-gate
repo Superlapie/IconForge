@@ -5,14 +5,19 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CLI="$ROOT/scripts/iconforge"
 failed=0
 
+collect_artifacts() {
+	"$ROOT/scripts/ci-artifacts" "$ROOT/out/ci-artifacts/quality-gate"
+}
+
 echo "Icon Forge quality gate"
 echo "========================"
 
-if "$CLI" --test; then
+if "$CLI" --test | tee "$ROOT/out/test-results.json"; then
 	:
 else
 	failed=1
 	echo "FAIL  automated Godot tests"
+	collect_artifacts
 fi
 
 mkdir -p "$ROOT/out"
@@ -31,6 +36,7 @@ if "$CLI" api --request "$API_CAPABILITIES" --json >/dev/null; then
 else
 	failed=1
 	echo "FAIL  machine API capabilities"
+	collect_artifacts
 fi
 
 if "$CLI" api --request "$API_RENDER" --json >/dev/null; then
@@ -38,6 +44,7 @@ if "$CLI" api --request "$API_RENDER" --json >/dev/null; then
 else
 	failed=1
 	echo "FAIL  machine API render_asset"
+	collect_artifacts
 fi
 
 if "$CLI" api --request "$API_PORTRAIT" --json >/dev/null; then
@@ -45,6 +52,7 @@ if "$CLI" api --request "$API_PORTRAIT" --json >/dev/null; then
 else
 	failed=1
 	echo "FAIL  machine API portrait purpose"
+	collect_artifacts
 fi
 
 if "$CLI" api --request "$API_CACHE" --json >/dev/null; then
@@ -53,10 +61,12 @@ if "$CLI" api --request "$API_CACHE" --json >/dev/null; then
 	else
 		failed=1
 		echo "FAIL  machine API cache hit"
+		collect_artifacts
 	fi
 else
 	failed=1
 	echo "FAIL  machine API cache render"
+	collect_artifacts
 fi
 
 if "$ROOT/scripts/client-e2e"; then
@@ -64,6 +74,7 @@ if "$ROOT/scripts/client-e2e"; then
 else
 	failed=1
 	echo "FAIL  official Enigma client E2E"
+	collect_artifacts
 fi
 
 if "$ROOT/scripts/lock-e2e"; then
@@ -71,6 +82,15 @@ if "$ROOT/scripts/lock-e2e"; then
 else
 	failed=1
 	echo "FAIL  cross-process output lock"
+	collect_artifacts
+fi
+
+if "$ROOT/scripts/service-e2e"; then
+	:
+else
+	failed=1
+	echo "FAIL  persistent service E2E"
+	collect_artifacts
 fi
 
 for preset in "$ROOT"/presets/*.json; do
@@ -79,6 +99,7 @@ for preset in "$ROOT"/presets/*.json; do
 	else
 		failed=1
 		echo "FAIL  preset validation: $preset"
+		collect_artifacts
 	fi
 done
 
@@ -87,6 +108,7 @@ if "$CLI" render fixtures/sword.gltf --preset weapon --output out/quality_sword.
 else
 	failed=1
 	echo "FAIL  single fixture render"
+	collect_artifacts
 fi
 
 if "$CLI" validate-output out/quality_sword.png --preset weapon --json; then
@@ -94,6 +116,7 @@ if "$CLI" validate-output out/quality_sword.png --preset weapon --json; then
 else
 	failed=1
 	echo "FAIL  output quality validation"
+	collect_artifacts
 fi
 
 if "$CLI" render-batch fixtures --preset neutral_asset_thumbnail --output out/quality_batch --force --manifest out/quality_batch/manifest.json --json; then
@@ -101,6 +124,7 @@ if "$CLI" render-batch fixtures --preset neutral_asset_thumbnail --output out/qu
 else
 	failed=1
 	echo "FAIL  batch render smoke test"
+	collect_artifacts
 fi
 
 if "$ROOT/scripts/real-model-e2e"; then
@@ -108,6 +132,7 @@ if "$ROOT/scripts/real-model-e2e"; then
 else
 	failed=1
 	echo "FAIL  real-model E2E"
+	collect_artifacts
 fi
 
 if "$ROOT/scripts/gui-e2e"; then
@@ -115,6 +140,7 @@ if "$ROOT/scripts/gui-e2e"; then
 else
 	failed=1
 	echo "FAIL  GUI drag/drop E2E"
+	collect_artifacts
 fi
 
 if "$ROOT/scripts/gui-interaction-e2e"; then
@@ -122,6 +148,7 @@ if "$ROOT/scripts/gui-interaction-e2e"; then
 else
 	failed=1
 	echo "FAIL  GUI interaction E2E"
+	collect_artifacts
 fi
 
 if [[ "$failed" -eq 0 ]]; then
@@ -130,4 +157,5 @@ if [[ "$failed" -eq 0 ]]; then
 fi
 
 echo "FAIL  one or more quality gates failed"
+collect_artifacts
 exit 1

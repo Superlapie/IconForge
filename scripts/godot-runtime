@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ENV_FILE="$ROOT/build/godot.env"
+
+if [[ -f "$ENV_FILE" ]]; then
+	# shellcheck disable=SC1090
+	source "$ENV_FILE"
+fi
+
+: "${GODOT_VERSION:=4.7.2-stable}"
+: "${GODOT_LINUX_ARCHIVE:=Godot_v${GODOT_VERSION}_linux.x86_64.zip}"
+: "${GODOT_LINUX_URL:=https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/${GODOT_LINUX_ARCHIVE}}"
+: "${GODOT_LINUX_SHA256:=}"
+
+godot_bin() {
+	if [[ -n "${ICONFORGE_GODOT:-}" ]]; then
+		echo "$ICONFORGE_GODOT"
+		return 0
+	fi
+	if [[ -n "${ICONSTUDIO_GODOT:-}" ]]; then
+		echo "$ICONSTUDIO_GODOT"
+		return 0
+	fi
+	local local_bin="$ROOT/.tools/godot/Godot_v${GODOT_VERSION}_linux.x86_64"
+	if [[ -x "$local_bin" ]]; then
+		echo "$local_bin"
+		return 0
+	fi
+	if command -v godot4 >/dev/null 2>&1; then
+		command -v godot4
+		return 0
+	fi
+	if command -v godot >/dev/null 2>&1; then
+		command -v godot
+		return 0
+	fi
+	return 1
+}
+
+install_godot_linux() {
+	local tools_dir="$ROOT/.tools/godot"
+	local archive="/tmp/${GODOT_LINUX_ARCHIVE}"
+	local target="$tools_dir/Godot_v${GODOT_VERSION}_linux.x86_64"
+	mkdir -p "$tools_dir"
+	curl -fsSL -o "$archive" "$GODOT_LINUX_URL"
+	if [[ -n "$GODOT_LINUX_SHA256" ]]; then
+		echo "$GODOT_LINUX_SHA256  $archive" | sha256sum -c -
+	fi
+	unzip -o "$archive" -d "$tools_dir"
+	chmod +x "$target"
+	echo "$target"
+}
+
+verify_godot() {
+	local bin
+	bin="$(godot_bin)" || {
+		echo "ICONFORGE_GODOT_NOT_FOUND" >&2
+		return 127
+	}
+	"$bin" --version >/dev/null
+	echo "$bin"
+}
+
+case "${1:-}" in
+	bin)
+		godot_bin
+		;;
+	install)
+		install_godot_linux
+		;;
+	verify)
+		verify_godot
+		;;
+	env)
+		cat "$ENV_FILE"
+		;;
+	*)
+		echo "usage: $0 {bin|install|verify|env}" >&2
+		exit 2
+		;;
+esac

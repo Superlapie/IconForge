@@ -119,7 +119,11 @@ If a sidecar exists and cannot be parsed or fails validation, the render **stops
 
 ## Output locations
 
-Under `<workspace_root>/generated/` by purpose category, e.g. `generated/icons/inventory/sword__abc12345.png`. Callers cannot specify arbitrary paths in safe mode. Review records are authoritative per-job files at `<workspace_root>/generated/reviews/<job_id>.json`; `generated/review_queue.json` is an advisory index only.
+Under `<workspace_root>/generated/` by purpose category, e.g. `generated/icons/inventory/sword__abc12345.png`. Callers cannot specify arbitrary paths in safe mode.
+
+Authoritative review state: `<workspace_root>/generated/reviews/<job_id>.json`.
+
+Advisory indexes (rebuildable, not required for correctness): `generated/review_queue.json`, `generated/output_index.json`, and per-record files under `generated/index/`.
 
 ## Cache semantics
 

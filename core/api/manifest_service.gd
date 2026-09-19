@@ -3,6 +3,7 @@ class_name ManifestService
 
 const _Schema = preload("res://core/api/api_schema.gd")
 const _Version = preload("res://core/api/icon_forge_version.gd")
+const _AdvisoryIndex = preload("res://core/util/advisory_index.gd")
 
 ## First-class production manifests for audit and reproducibility.
 
@@ -180,8 +181,8 @@ func manifest_matches_identity(manifest: Dictionary, identity: Dictionary) -> bo
 	return true
 
 func _update_output_index(output_path: String, ownership: Dictionary) -> void:
-	var index: Dictionary = IconForgeFileUtil.read_json(output_index_path())
-	index[output_path] = {
+	var summary: Dictionary = {
+		"output": output_path,
 		"job_id": ownership.get("job_id", ""),
 		"sha256": ownership.get("sha256", ""),
 		"source": ownership.get("source", ""),
@@ -189,6 +190,9 @@ func _update_output_index(output_path: String, ownership: Dictionary) -> void:
 		"asset_id": ownership.get("asset_id", ""),
 		"updated_at": ownership.get("updated_at", ""),
 	}
+	_AdvisoryIndex.write_record(workspace_root, "output", output_path, summary)
+	var index: Dictionary = IconForgeFileUtil.read_json(output_index_path())
+	index[output_path] = summary
 	IconForgeFileUtil.write_json_atomic(output_index_path(), index)
 
 func _restore_output(output_path: String, had_output: bool, output_backup_path: String) -> Dictionary:

@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CLI="$ROOT/scripts/iconforge"
+OUT="$ROOT/out/benchmark-service"
+mkdir -p "$OUT"
+
+REQUEST='{"schema_version":1,"operation":"render_asset","asset":"fixtures/sword.gltf","purpose":"shop_thumbnail","asset_id":"benchmark_probe","force":true}'
+CACHE_REQUEST='{"schema_version":1,"operation":"render_asset","asset":"fixtures/sword.gltf","purpose":"shop_thumbnail","asset_id":"benchmark_probe"}'
+
+measure() {
+	local label="$1"
+	shift
+	local start end
+	start="$(date +%s%N)"
+	"$@" >/dev/null
+	end="$(date +%s%N)"
+	local ms=$(( (end - start) / 1000000 ))
+	echo "$label=${ms}ms"
+}
+
+{
+	echo "# Icon Forge service benchmark (informational, not a quality gate)"
+	echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+	measure "cold_cli_render" bash -c "printf '%s\n' '$REQUEST' | $CLI api --stdin --json"
+	measure "warm_cli_cache_hit" bash -c "printf '%s\n' '$CACHE_REQUEST' | $CLI api --stdin --json"
+	SERVICE_REQ=$(mktemp)
+	printf '%s\n' "$REQUEST" "$CACHE_REQUEST" '{"operation":"shutdown"}' >"$SERVICE_REQ"
+	measure "warm_service_render_and_cache" bash -c "$CLI service <'$SERVICE_REQ'"
+	rm -f "$SERVICE_REQ"
+} | tee "$OUT/results.txt"
+
+cat "$OUT/results.txt"

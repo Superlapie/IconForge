@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -u
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CLI="$ROOT/scripts/iconforge"
+ARTIFACTS="$ROOT/out/ci-artifacts/contract"
+failed=0
+
+mkdir -p "$ROOT/out" "$ARTIFACTS"
+
+collect_artifacts() {
+	mkdir -p "$ARTIFACTS"
+	cp -a "$ROOT/out"/*.json "$ARTIFACTS"/ 2>/dev/null || true
+}
+
+echo "Icon Forge contract gate"
+echo "========================"
+
+if "$CLI" --contract-test | tee "$ARTIFACTS/contract-test.json"; then
+	:
+else
+	failed=1
+	echo "FAIL  contract tests"
+	collect_artifacts
+fi
+
+CAPS_REQ="$ARTIFACTS/capabilities.request.json"
+SCHEMA_REQ="$ARTIFACTS/schema.request.json"
+printf '%s\n' '{"schema_version":1,"operation":"capabilities"}' >"$CAPS_REQ"
+printf '%s\n' '{"schema_version":1,"operation":"schema"}' >"$SCHEMA_REQ"
+
+if "$CLI" api --request "$CAPS_REQ" --json | tee "$ARTIFACTS/capabilities.json"; then
+	:
+else
+	failed=1
+	echo "FAIL  machine API capabilities"
+	collect_artifacts
+fi
+
+if "$CLI" api --request "$SCHEMA_REQ" --json | tee "$ARTIFACTS/schema.json"; then
+	:
+else
+	failed=1
+	echo "FAIL  machine API schema"
+	collect_artifacts
+fi
+
+if [[ "$failed" -eq 0 ]]; then
+	echo "PASS  contract gate"
+	exit 0
+fi
+
+echo "FAIL  contract gate"
+exit 1

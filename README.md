@@ -91,7 +91,24 @@ If Icon Forge saves you time on your Godot project, a star, a preset contributio
 ./scripts/iconforge render fixtures/sword.gltf --preset weapon --output out/sword.png --force --json
 ```
 
-The included `scripts/iconforge` wrapper uses a local Godot binary when present and uses `xvfb-run` for software OpenGL batch rendering on headless Linux machines. Set `ICONFORGE_GODOT` to use another Godot 4.x executable.
+The included `scripts/iconforge` wrapper uses a local Godot binary when present and uses `xvfb-run` for software OpenGL batch rendering on headless Linux machines. Set `ICONFORGE_GODOT` to use another Godot 4.x executable, or run `./scripts/bootstrap` on Linux to install the pinned Godot 4.7.2 runtime with SHA-256 verification.
+
+**Windows:** use `scripts/iconforge.ps1` with Godot 4.7.x installed or `ICONFORGE_GODOT` set.
+
+## Product maturity (0.2.0)
+
+| Surface | Linux | Windows | macOS |
+|--------|-------|---------|-------|
+| Full render + GUI quality gate | Yes (`./scripts/quality-gate`) | No | No |
+| Contract gate (API, identity, paths, manifests) | Yes | Yes | Yes |
+| Persistent `service` transport | Yes | Best effort | Best effort |
+| MCP server | Planned — see `mcp/README.md` | Planned | Planned |
+
+**What `validated` means:** the output passed the production contract for the requested purpose, was committed transactionally with manifest + owner records, and is tied to current source/dependency identity. It does not guarantee artistic perfection.
+
+**What safe mode does not mean:** Icon Forge is not a hostile-code sandbox. Godot still parses supplied assets locally.
+
+**Advisory indexes:** `generated/output_index.json`, `generated/review_queue.json`, and `user://iconforge/cache.json` (legacy) are rebuildable hints. Authoritative state lives in per-job manifests, owner files, per-job review records, and output hashes.
 
 ## What agents get
 

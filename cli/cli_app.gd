@@ -14,6 +14,7 @@ var quality: QualityService = QualityService.new()
 var compare: CompareService = CompareService.new()
 var override_service: OverrideService = OverrideService.new()
 const ApiServiceScript = preload("res://core/api/api_service.gd")
+const IconForgeServiceScript = preload("res://core/service/icon_forge_service.gd")
 
 func run(raw_args: Array[String]) -> int:
 	var args: Array[String] = _clean_args(raw_args)
@@ -46,6 +47,8 @@ func run(raw_args: Array[String]) -> int:
 			return _validate_output(args)
 		"api":
 			return await _api(args)
+		"service":
+			return await _service(args)
 		_:
 			return _finish(_error("CLI_UNKNOWN_COMMAND", "Unknown command '%s'." % command, {"command": command}), _json_mode(args), EXIT_USAGE)
 
@@ -201,6 +204,36 @@ func _api(args: Array[String]) -> int:
 				exit_code = EXIT_USAGE if str(result.get("code", "")) in ["INVALID_REQUEST", "UNKNOWN_OPERATION", "UNKNOWN_FIELD", "INVALID_FIELD_TYPE", "UNSUPPORTED_SCHEMA_VERSION"] else EXIT_RENDER
 	return _finish(result, _json_mode(args) or true, exit_code)
 
+func _service(args: Array[String]) -> int:
+	var safe_mode: bool = not _has_flag(args, "--expert")
+	var workspace_root: String = OS.get_environment("ICONFORGE_WORKSPACE_ROOT")
+	if workspace_root.is_empty():
+		workspace_root = OS.get_environment("ICONSTUDIO_WORKSPACE_ROOT")
+	var workspace_option: String = _option(args, "--workspace-root", "")
+	if not workspace_option.is_empty():
+		workspace_root = workspace_option
+	var service: RefCounted = IconForgeServiceScript.new(workspace_root)
+	var stdin_text: String = ""
+	if FileAccess.file_exists("/dev/stdin"):
+		var stdin_file: FileAccess = FileAccess.open("/dev/stdin", FileAccess.READ)
+		if stdin_file != null:
+			while not stdin_file.eof_reached():
+				var line: String = stdin_file.get_line()
+				if line.strip_edges().is_empty():
+					continue
+				var parsed: Variant = JSON.parse_string(line)
+				if not parsed is Dictionary:
+					print(JSON.stringify(_error("INVALID_REQUEST", "Service input line was not a JSON object.", {})))
+					continue
+				var request: Dictionary = parsed
+				if str(request.get("operation", "")) == "shutdown":
+					print(JSON.stringify(service.shutdown()))
+					break
+				var result: Dictionary = await service.handle_request(request, safe_mode)
+				print(JSON.stringify(result))
+			stdin_file.close()
+	return EXIT_OK
+
 func _validate_output(args: Array[String]) -> int:
 	var output: String = _first_positional(args, 1)
 	if output.is_empty():
@@ -331,7 +364,8 @@ func _help_result() -> Dictionary:
 			"schema": "Print the self-describing preset schema.",
 			"compare": "Compare two images with deterministic pixel metrics.",
 			"validate-output": "Run resolution, alpha, clipping, and occupancy checks.",
-			"api": "Execute a canonical machine API request (--request FILE). Optional --workspace-root or ICONFORGE_WORKSPACE_ROOT."
+			"api": "Execute a canonical machine API request (--request FILE). Optional --workspace-root or ICONFORGE_WORKSPACE_ROOT.",
+			"service": "Persistent JSON-lines Machine API over stdin/stdout. One request object per line."
 		},
 		"global_options": ["--json", "--force", "--preset ID", "--output PATH", "--request FILE", "--stdin", "--expert"]
 	}

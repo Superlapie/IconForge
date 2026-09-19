@@ -1,0 +1,71 @@
+name: contract-gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  contract-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d275a9733297854a # v4.2.2
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3 unzip curl
+
+      - name: Install and verify Godot
+        run: |
+          chmod +x scripts/godot-runtime
+          echo "ICONFORGE_GODOT=$(./scripts/godot-runtime install)" >> "$GITHUB_ENV"
+
+      - name: Run contract gate
+        run: ./scripts/contract-gate
+
+      - name: Upload CI artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: contract-gate-linux
+          path: out/ci-artifacts/contract
+          if-no-files-found: warn
+
+  contract-windows:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d275a9733297854a # v4.2.2
+
+      - name: Install Godot
+        shell: bash
+        run: |
+          curl -fsSL -o /tmp/godot.zip https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_win64.exe.zip
+          unzip -o /tmp/godot.zip -d /tmp/godot
+          echo "ICONFORGE_GODOT=/tmp/godot/Godot_v4.7.2-stable_win64.exe" >> "$GITHUB_ENV"
+
+      - name: Run contract gate
+        shell: bash
+        run: ./scripts/contract-gate
+
+  contract-macos:
+    runs-on: macos-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d275a9733297854a # v4.2.2
+
+      - name: Install Godot
+        shell: bash
+        run: |
+          curl -fsSL -o /tmp/godot.zip https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_macos.universal.zip
+          unzip -o /tmp/godot.zip -d /tmp/godot
+          echo "ICONFORGE_GODOT=/tmp/godot/Godot.app/Contents/MacOS/Godot" >> "$GITHUB_ENV"
+
+      - name: Run contract gate
+        shell: bash
+        run: ./scripts/contract-gate

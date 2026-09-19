@@ -3,6 +3,7 @@ extends Node
 const IconForgeCliScript = preload("res://cli/cli_app.gd")
 const ForgeUiScript = preload("res://app/forge_ui.gd")
 const TestRunnerScript = preload("res://tests/test_runner.gd")
+const ContractRunnerScript = preload("res://tests/contract_runner.gd")
 
 func _ready() -> void:
 	var args: Array[String] = []
@@ -17,6 +18,12 @@ func _ready() -> void:
 		var test_result: Dictionary = await runner.run()
 		print(JSON.stringify(test_result))
 		get_tree().quit(0 if bool(test_result.get("success", false)) else 1)
+		return
+	if args.has("--contract-test"):
+		var contract_runner: RefCounted = ContractRunnerScript.new()
+		var contract_result: Dictionary = await contract_runner.run()
+		print(JSON.stringify(contract_result))
+		get_tree().quit(0 if bool(contract_result.get("success", false)) else 1)
 		return
 	if args.has("--gui-interaction-test"):
 		var interaction_gui: Control = ForgeUiScript.new()

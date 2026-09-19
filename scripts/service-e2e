@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CLI="$ROOT/scripts/iconforge"
+ARTIFACTS="$ROOT/out/ci-artifacts/service"
+REQUEST_FILE="$(mktemp)"
+RESPONSE_FILE="$(mktemp)"
+
+mkdir -p "$ARTIFACTS"
+
+cat >"$REQUEST_FILE" <<'EOF'
+{"schema_version":1,"operation":"capabilities"}
+{"schema_version":1,"operation":"render_asset","asset":"fixtures/sword.gltf","purpose":"inventory_icon","asset_id":"service_e2e_probe","force":true}
+{"schema_version":1,"operation":"render_asset","asset":"fixtures/sword.gltf","purpose":"inventory_icon","asset_id":"service_e2e_probe"}
+{"schema_version":1,"operation":"shutdown"}
+EOF
+
+"$CLI" service <"$REQUEST_FILE" | tee "$RESPONSE_FILE"
+
+python3 - "$RESPONSE_FILE" <<'PY'
+import json, sys
+lines = [line for line in open(sys.argv[1]) if line.strip().startswith("{")]
+assert len(lines) >= 4, f"expected 4 service responses, got {len(lines)}"
+caps = json.loads(lines[0])
+assert caps.get("success") is True, caps
+render = json.loads(lines[1])
+assert render.get("success") is True, render
+cache = json.loads(lines[2])
+assert cache.get("cache_hit") is True, cache
+shutdown = json.loads(lines[3])
+assert shutdown.get("status") == "shutdown", shutdown
+print("service-e2e: PASS")
+PY
+
+cp "$REQUEST_FILE" "$ARTIFACTS/service-request.jsonl"
+cp "$RESPONSE_FILE" "$ARTIFACTS/service-response.jsonl"
+rm -f "$REQUEST_FILE" "$RESPONSE_FILE"

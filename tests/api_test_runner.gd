@@ -5,6 +5,7 @@ var failures: Array = []
 var passed: Array = []
 var scenarios_run: int = 0
 const ApiServiceScript = preload("res://core/api/api_service.gd")
+const ReviewQueue = preload("res://core/api/review_queue.gd")
 var api: RefCounted = ApiServiceScript.new()
 var overrides: OverrideService = OverrideService.new()
 var repo_root: String = ProjectSettings.globalize_path("res://")
@@ -83,6 +84,7 @@ func run() -> Dictionary:
 	api.manifest_service.reset_test_seams()
 	OutputLock.reset_test_seams()
 	ApiServiceScript.reset_test_seams()
+	ReviewQueue.reset_test_seams()
 	AssetInspector.reset_inspect_count()
 	return {
 		"success": failures.is_empty(),
