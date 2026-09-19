@@ -4,6 +4,17 @@ Icon Studio is a **community-built** tool. It started as production infrastructu
 
 Pull requests that improve reliability, preset quality, documentation, or machine-facing workflows are welcome. I review good PRs promptly and would rather merge thoughtful community work than keep this as a solo project.
 
+## Licensing and contributions
+
+By contributing to this repository, you agree that:
+
+1. Your contributions are licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE).
+2. You grant Superlapie the right to use, sublicense, and commercially license your contributions as part of Icon Studio under separate commercial license terms offered to paying customers.
+
+You keep copyright in your contributions, but you may not contribute code you do not have the right to license under these terms.
+
+Commercial use of Icon Studio itself still requires a separate commercial license. See [COMMERCIAL.md](COMMERCIAL.md).
+
 ## Before you open a PR
 
 1. Read [AGENTS.md](AGENTS.md) for the canonical architecture and safe editing rules.
