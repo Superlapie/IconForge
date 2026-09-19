@@ -1,8 +1,20 @@
 extends RefCounted
 class_name LightingRigService
 
+const KNOWN_RIGS: Array[String] = [
+	"neutral_studio",
+	"stylized_inventory",
+	"warm_fantasy",
+	"cold_magic",
+	"dramatic_boss",
+	"flat_ui",
+]
+
 ## Named rigs are data-driven defaults. Explicit light dictionaries in a
 ## preset override the profile, so a studio can tune a shipped rig safely.
+
+static func known_rigs() -> Array[String]:
+	return KNOWN_RIGS.duplicate()
 
 func resolve(lighting: Dictionary) -> Dictionary:
 	var rig_name: String = str(lighting.get("rig", "neutral_studio"))

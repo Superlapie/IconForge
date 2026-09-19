@@ -51,6 +51,7 @@ func _test_override_contract() -> void:
 	_assert(not service.validate({"camera": {"min_zoom": 4.0, "max_zoom": 1.0}}).is_empty(), "invalid nested camera zoom range is rejected")
 	_assert(service.validate({"lighting": {"key": {"angle": [-30.0, 45.0, 0.0]}}}).is_empty(), "lighting angle override passes")
 	_assert(service.validate({"lighting": {"rig": "neutral_studio", "ambient_energy": 0.5, "key": {"angle": [-30.0, 45.0, 0.0], "intensity": 1.2, "color": [1.0, 0.93, 0.84, 1.0], "shadow": true}}}).is_empty(), "valid lighting configuration passes")
+	_assert(not service.validate({"lighting": {"rig": "banana"}}).is_empty(), "unknown lighting rig is rejected")
 	_assert(not service.validate({"lighting": {"kee": {"angle": [-30.0, 45.0, 0.0]}}}).is_empty(), "misspelled lighting field is rejected")
 	_assert(not service.validate({"lighting": {"key": {"angle": [-30.0, 45.0, 0.0], "energy": 1.2}}}).is_empty(), "unknown nested lighting field is rejected")
 	_assert(not service.validate({"composition": {"bogus": 1}}).is_empty(), "unknown nested object field is rejected")

@@ -80,6 +80,9 @@ func commit_validated_render(output_temp_path: String, output_path: String, job_
 	if str(stored_output.get("sha256", "")) != output_sha256:
 		_restore_output(output_path, had_output, output_backup_path)
 		_cleanup_backup(output_backup_path)
+		var mismatched_manifest_path: String = manifest_path_for_job(job_id)
+		if FileAccess.file_exists(mismatched_manifest_path):
+			DirAccess.remove_absolute(mismatched_manifest_path)
 		return {"success": false, "error": {"code": "MANIFEST_MISMATCH", "message": "Committed manifest does not match output hash."}}
 
 	var ownership: Dictionary = {
@@ -179,7 +182,9 @@ func _update_output_index(output_path: String, ownership: Dictionary) -> void:
 
 func _restore_output(output_path: String, had_output: bool, output_backup_path: String) -> void:
 	if had_output and not output_backup_path.is_empty() and FileAccess.file_exists(output_backup_path):
-		DirAccess.copy_absolute(output_backup_path, output_path)
+		var restore_error: Error = DirAccess.copy_absolute(output_backup_path, output_path)
+		if restore_error != OK and FileAccess.file_exists(output_path):
+			DirAccess.remove_absolute(output_path)
 	elif FileAccess.file_exists(output_path):
 		DirAccess.remove_absolute(output_path)
 

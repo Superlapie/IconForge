@@ -4,6 +4,7 @@ set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CLI="$ROOT/scripts/iconforge"
 WORKSPACE="$ROOT/out/lock_e2e_workspace"
+export ICONFORGE_WORKSPACE_ROOT="$WORKSPACE"
 rm -rf "$WORKSPACE"
 mkdir -p "$WORKSPACE/a" "$WORKSPACE/b" "$WORKSPACE/requests"
 
@@ -45,3 +46,42 @@ if len(validated) != 1 or len(blocked) != 1:
     sys.exit(1)
 print("PASS  parallel ownership lock")
 PY
+
+STALE_ASSET_ID="lock_e2e_stale"
+STALE_OUTPUT="$WORKSPACE/generated/icons/inventory/${STALE_ASSET_ID}.png"
+STALE_LOCK="${STALE_OUTPUT}.lock"
+mkdir -p "$(dirname "$STALE_OUTPUT")"
+mkdir "$STALE_LOCK"
+python3 - "$STALE_LOCK/lease.json" <<'PY'
+import json, sys, time
+from pathlib import Path
+
+now_ms = int(time.time() * 1000)
+Path(sys.argv[1]).write_text(json.dumps({
+    "token": "stale.e2e.token",
+    "pid": 999999,
+    "acquired_at_ms": now_ms - 300000,
+    "heartbeat_at_ms": now_ms - 300000,
+}))
+PY
+
+printf '%s\n' "{\"schema_version\":1,\"operation\":\"render_asset\",\"asset\":\"$WORKSPACE/a/alpha.gltf\",\"purpose\":\"inventory_icon\",\"asset_id\":\"$STALE_ASSET_ID\",\"force\":true}" >"$WORKSPACE/requests/stale.json"
+if "$CLI" api --request "$WORKSPACE/requests/stale.json" --json >"$WORKSPACE/stale.out"; then
+	python3 - "$WORKSPACE/stale.out" "$STALE_LOCK" <<'PY'
+import json, sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text().strip().splitlines()[-1])
+lock_dir = Path(sys.argv[2])
+if not payload.get("success"):
+    print("FAIL  stale lock reacquire: render did not succeed", payload)
+    sys.exit(1)
+if lock_dir.exists():
+    print("FAIL  stale lock reacquire: stale lock directory still present")
+    sys.exit(1)
+print("PASS  stale dead-pid lock reacquire")
+PY
+else
+	echo "FAIL  stale lock reacquire: CLI failed"
+	exit 1
+fi

@@ -1,6 +1,8 @@
 extends RefCounted
 class_name OverrideService
 
+const _LightingRigService = preload("res://core/services/lighting_service.gd")
+
 const ALLOWED_TOP_LEVEL: Array[String] = [
 	"yaw", "pitch", "roll", "occupancy", "padding", "scale",
 	"camera", "lighting", "composition", "environment", "width", "height", "background",
@@ -126,8 +128,11 @@ func _validate_lighting(value: Variant, errors: Array) -> void:
 	var lighting: Dictionary = value
 	var allowed_keys: Array = LIGHTING_SCHEMA["keys"]
 	_reject_unknown_keys(lighting, allowed_keys, "lighting", errors)
-	if lighting.has("rig") and typeof(lighting["rig"]) != TYPE_STRING:
-		errors.append({"code": "OVERRIDE_LIGHTING_INVALID", "path": "lighting.rig", "message": "lighting.rig must be a string."})
+	if lighting.has("rig"):
+		if typeof(lighting["rig"]) != TYPE_STRING:
+			errors.append({"code": "OVERRIDE_LIGHTING_INVALID", "path": "lighting.rig", "message": "lighting.rig must be a string."})
+		else:
+			_validate_enum(lighting["rig"], _LightingRigService.KNOWN_RIGS, "lighting.rig", "OVERRIDE_LIGHTING_INVALID", errors)
 	_validate_range(lighting, "ambient_energy", 0.0, 16.0, "OVERRIDE_LIGHTING_INVALID", errors, "lighting.ambient_energy")
 	for light_type in LIGHTING_SCHEMA["light_types"]:
 		if lighting.has(light_type):

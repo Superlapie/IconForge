@@ -5,21 +5,39 @@ const _ErrorCodes = preload("res://core/api/error_codes.gd")
 
 const DEFAULT_TIMEOUT_MS: int = 60000
 const STALE_MS: int = 120000
+const LEASE_WRITE_GRACE_MS: int = 5000
 const POLL_MS: int = 50
 
 var lock_dir: String = ""
+var lease_token: String = ""
 var acquired: bool = false
+
+static var test_process_alive_override: Dictionary = {}
+
+static func reset_test_seams() -> void:
+	test_process_alive_override.clear()
+
+static func _now_ms() -> int:
+	return int(Time.get_unix_time_from_system() * 1000.0)
 
 func acquire(output_path: String, timeout_ms: int = DEFAULT_TIMEOUT_MS) -> Dictionary:
 	lock_dir = "%s.lock" % output_path
+	lease_token = ""
+	acquired = false
 	var deadline: int = Time.get_ticks_msec() + timeout_ms
 	while Time.get_ticks_msec() <= deadline:
 		var created: Error = DirAccess.make_dir_absolute(lock_dir)
 		if created == OK:
-			_write_lease()
+			lease_token = _generate_token()
+			if not _write_lease():
+				_remove_lock_dir_if_token_matches(lease_token)
+				lease_token = ""
+				OS.delay_msec(POLL_MS)
+				continue
 			acquired = true
-			return {"success": true, "path": lock_dir}
-		_reap_stale()
+			return {"success": true, "path": lock_dir, "token": lease_token}
+		if _try_reap_stale():
+			continue
 		OS.delay_msec(POLL_MS)
 	return {
 		"success": false,
@@ -31,38 +49,120 @@ func acquire(output_path: String, timeout_ms: int = DEFAULT_TIMEOUT_MS) -> Dicti
 		},
 	}
 
+func heartbeat() -> bool:
+	if not acquired or lease_token.is_empty() or lock_dir.is_empty():
+		return false
+	var lease_path: String = lock_dir.path_join("lease.json")
+	var lease: Dictionary = _read_lease_file()
+	if str(lease.get("token", "")) != lease_token:
+		return false
+	lease["heartbeat_at_ms"] = _now_ms()
+	return _write_lease_payload(lease_path, lease)
+
 func release() -> void:
-	if not acquired or lock_dir.is_empty():
+	if not acquired or lock_dir.is_empty() or lease_token.is_empty():
+		acquired = false
+		lease_token = ""
 		return
+	_remove_lock_dir_if_token_matches(lease_token)
+	acquired = false
+	lease_token = ""
+
+func _generate_token() -> String:
+	return "%d.%d.%d" % [OS.get_process_id(), Time.get_ticks_usec(), randi()]
+
+func _write_lease() -> bool:
+	var now_ms: int = _now_ms()
+	return _write_lease_payload(lock_dir.path_join("lease.json"), {
+		"token": lease_token,
+		"pid": OS.get_process_id(),
+		"acquired_at_ms": now_ms,
+		"heartbeat_at_ms": now_ms,
+	})
+
+func _write_lease_payload(lease_path: String, payload: Dictionary) -> bool:
+	var temp_path: String = "%s.tmp.%s" % [lease_path, str(Time.get_ticks_usec())]
+	var file: FileAccess = FileAccess.open(temp_path, FileAccess.WRITE)
+	if file == null:
+		return false
+	file.store_string(JSON.stringify(payload))
+	file.close()
+	var replace_error: Error = DirAccess.rename_absolute(temp_path, lease_path)
+	if replace_error != OK:
+		if FileAccess.file_exists(temp_path):
+			DirAccess.remove_absolute(temp_path)
+		return false
+	return true
+
+func _read_lease_file() -> Dictionary:
+	var lease_path: String = lock_dir.path_join("lease.json")
+	if not FileAccess.file_exists(lease_path):
+		return {}
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(lease_path))
+	return parsed if parsed is Dictionary else {}
+
+func _try_reap_stale() -> bool:
+	if lock_dir.is_empty() or not DirAccess.dir_exists_absolute(lock_dir):
+		return false
+	var lease_path: String = lock_dir.path_join("lease.json")
+	if not FileAccess.file_exists(lease_path):
+		var age_ms: int = _dir_age_ms(lock_dir)
+		if age_ms < LEASE_WRITE_GRACE_MS:
+			return false
+		return _remove_lock_dir_unconditional()
+	var lease: Dictionary = _read_lease_file()
+	if lease.is_empty():
+		return false
+	if not _is_lease_stale(lease):
+		return false
+	return _remove_lock_dir_unconditional()
+
+func _is_lease_stale(lease: Dictionary) -> bool:
+	var pid: int = int(lease.get("pid", 0))
+	var heartbeat_ms: int = int(lease.get("heartbeat_at_ms", lease.get("acquired_at_ms", 0)))
+	var acquired_ms: int = int(lease.get("acquired_at_ms", 0))
+	if acquired_ms <= 0 and heartbeat_ms <= 0:
+		return _dir_age_ms(lock_dir) >= STALE_MS
+	if pid > 0 and _process_alive(pid):
+		return false
+	if acquired_ms <= 0:
+		acquired_ms = heartbeat_ms
+	if acquired_ms <= 0:
+		return _dir_age_ms(lock_dir) >= STALE_MS
+	return _now_ms() - acquired_ms > STALE_MS
+
+func _dir_age_ms(path: String) -> int:
+	var modified_sec: int = int(FileAccess.get_modified_time(path))
+	if modified_sec <= 0:
+		return 0
+	return max(0, _now_ms() - modified_sec * 1000)
+
+func _process_alive(pid: int) -> bool:
+	if pid <= 0:
+		return false
+	if test_process_alive_override.has(pid):
+		return bool(test_process_alive_override[pid])
+	if pid == OS.get_process_id():
+		return true
+	if OS.get_name() == "Linux":
+		var output: Array = []
+		var exit_code: int = OS.execute("kill", ["-0", str(pid)], output, true, false)
+		return exit_code == 0
+	return false
+
+func _remove_lock_dir_if_token_matches(expected_token: String) -> void:
+	if lock_dir.is_empty() or expected_token.is_empty() or not DirAccess.dir_exists_absolute(lock_dir):
+		return
+	var lease: Dictionary = _read_lease_file()
+	if not lease.is_empty() and str(lease.get("token", "")) != expected_token:
+		return
+	_remove_lock_dir_unconditional()
+
+func _remove_lock_dir_unconditional() -> bool:
+	if lock_dir.is_empty() or not DirAccess.dir_exists_absolute(lock_dir):
+		return false
 	var lease_path: String = lock_dir.path_join("lease.json")
 	if FileAccess.file_exists(lease_path):
 		DirAccess.remove_absolute(lease_path)
-	if DirAccess.dir_exists_absolute(lock_dir):
-		DirAccess.remove_absolute(lock_dir)
-	acquired = false
-
-func _write_lease() -> void:
-	var lease_path: String = lock_dir.path_join("lease.json")
-	var file: FileAccess = FileAccess.open(lease_path, FileAccess.WRITE)
-	if file == null:
-		return
-	file.store_string(JSON.stringify({
-		"pid": OS.get_process_id(),
-		"acquired_at": Time.get_ticks_msec(),
-	}))
-	file.close()
-
-func _reap_stale() -> void:
-	if lock_dir.is_empty() or not DirAccess.dir_exists_absolute(lock_dir):
-		return
-	var lease_path: String = lock_dir.path_join("lease.json")
-	var lease: Dictionary = {}
-	if FileAccess.file_exists(lease_path):
-		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(lease_path))
-		if parsed is Dictionary:
-			lease = parsed
-	var acquired_at: int = int(lease.get("acquired_at", 0))
-	if acquired_at == 0 or Time.get_ticks_msec() - acquired_at > STALE_MS:
-		if FileAccess.file_exists(lease_path):
-			DirAccess.remove_absolute(lease_path)
-		DirAccess.remove_absolute(lock_dir)
+	DirAccess.remove_absolute(lock_dir)
+	return true

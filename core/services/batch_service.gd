@@ -21,6 +21,7 @@ func render_sources(sources: Array, preset: PresetDefinition, output_dir: String
 	var success_count: int = 0
 	var failure_count: int = 0
 	var warning_count: int = 0
+	var manifest_written: bool = false
 	for source_path in sources:
 		var filename: String = _expand_pattern(pattern, str(source_path), preset.get_id())
 		if filename.get_extension().is_empty():
@@ -55,7 +56,11 @@ func render_sources(sources: Array, preset: PresetDefinition, output_dir: String
 			"summary": {"total": sources.size(), "success": success_count, "failed": failure_count, "warnings": warning_count},
 			"renders": renders
 		}
-		IconForgeFileUtil.write_json_atomic(manifest_path, manifest)
+		var manifest_error: Error = IconForgeFileUtil.write_json_atomic(manifest_path, manifest)
+		if manifest_error == OK:
+			manifest_written = true
+		else:
+			failure_count += 1
 	return {
 		"success": failure_count == 0,
 		"partial_success": success_count > 0 and failure_count > 0,
@@ -63,7 +68,7 @@ func render_sources(sources: Array, preset: PresetDefinition, output_dir: String
 		"output": output_dir,
 		"preset": preset.get_id(),
 		"summary": {"total": sources.size(), "success": success_count, "failed": failure_count, "warnings": warning_count},
-		"manifest": manifest_path if manifest_enabled else "",
+		"manifest": manifest_path if manifest_written else "",
 		"renders": renders
 	}
 

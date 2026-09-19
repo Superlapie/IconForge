@@ -52,6 +52,10 @@ func run() -> Dictionary:
 	await _scenario_aggregate_partial_and_review()
 	await _scenario_review_queue_workspace()
 	await _scenario_output_lock_contention()
+	await _scenario_output_lock_live_holder_not_reaped_by_age()
+	await _scenario_output_lock_dead_pid_reaped()
+	await _scenario_output_lock_token_safe_release()
+	await _scenario_output_lock_missing_lease_grace()
 	await _scenario_aggregate_manifest_write_failure()
 	await _scenario_workspace_exclusive_relative_path()
 	await _scenario_sidecar_value_validation()
@@ -61,6 +65,7 @@ func run() -> Dictionary:
 	await _scenario_opaque_validation_requires_metadata()
 	IconForgeFileUtil.reset_test_seams()
 	api.manifest_service.reset_test_seams()
+	OutputLock.reset_test_seams()
 	AssetInspector.reset_inspect_count()
 	return {
 		"success": failures.is_empty(),
@@ -851,6 +856,79 @@ func _scenario_output_lock_contention() -> void:
 	var third: Dictionary = second_lock.acquire(path, 250)
 	_assert(bool(third.get("success", false)), "lock available after release")
 	second_lock.release()
+
+func _scenario_output_lock_live_holder_not_reaped_by_age() -> void:
+	scenarios_run += 1
+	OutputLock.reset_test_seams()
+	var OutputLockScript = load("res://core/api/output_lock.gd")
+	var path: String = repo_root.path_join("out/lock_live_age_%d.png" % Time.get_ticks_usec())
+	var holder: RefCounted = OutputLockScript.new()
+	var first: Dictionary = holder.acquire(path, 500)
+	_assert(bool(first.get("success", false)), "live holder acquires lock")
+	var lease_path: String = holder.lock_dir.path_join("lease.json")
+	var lease: Dictionary = IconForgeFileUtil.read_json(lease_path)
+	lease["acquired_at_ms"] = OutputLock._now_ms() - 999999999
+	lease["heartbeat_at_ms"] = lease["acquired_at_ms"]
+	IconForgeFileUtil.write_json_atomic(lease_path, lease)
+	var contender: RefCounted = OutputLockScript.new()
+	var second: Dictionary = contender.acquire(path, 300)
+	_assert(not bool(second.get("success", true)), "live holder is not reaped for ancient timestamp")
+	_assert(str(second.get("error", {}).get("code", "")) == "OUTPUT_LOCKED", "live holder stale reap code")
+	holder.release()
+	OutputLock.reset_test_seams()
+
+func _scenario_output_lock_dead_pid_reaped() -> void:
+	scenarios_run += 1
+	OutputLock.reset_test_seams()
+	var OutputLockScript = load("res://core/api/output_lock.gd")
+	var path: String = repo_root.path_join("out/lock_dead_pid_%d.png" % Time.get_ticks_usec())
+	var lock_dir: String = "%s.lock" % path
+	DirAccess.make_dir_recursive_absolute(lock_dir.get_base_dir())
+	DirAccess.make_dir_absolute(lock_dir)
+	var stale_ms: int = OutputLock._now_ms() - OutputLock.STALE_MS - 5000
+	IconForgeFileUtil.write_json_atomic(lock_dir.path_join("lease.json"), {
+		"token": "dead.test.token",
+		"pid": 999999,
+		"acquired_at_ms": stale_ms,
+		"heartbeat_at_ms": stale_ms,
+	})
+	OutputLock.test_process_alive_override[999999] = false
+	var lock: RefCounted = OutputLockScript.new()
+	var result: Dictionary = lock.acquire(path, 500)
+	_assert(bool(result.get("success", false)), "dead pid stale lock is reaped")
+	lock.release()
+	OutputLock.reset_test_seams()
+
+func _scenario_output_lock_token_safe_release() -> void:
+	scenarios_run += 1
+	var OutputLockScript = load("res://core/api/output_lock.gd")
+	var path: String = repo_root.path_join("out/lock_token_%d.png" % Time.get_ticks_usec())
+	var first_lock: RefCounted = OutputLockScript.new()
+	_assert(bool(first_lock.acquire(path, 500).get("success", false)), "token test holder acquires")
+	var lease_path: String = first_lock.lock_dir.path_join("lease.json")
+	var lease: Dictionary = IconForgeFileUtil.read_json(lease_path)
+	lease["token"] = "newer.owner.token"
+	IconForgeFileUtil.write_json_atomic(lease_path, lease)
+	first_lock.release()
+	_assert(DirAccess.dir_exists_absolute(first_lock.lock_dir), "stale releaser cannot delete newer lock")
+	if FileAccess.file_exists(lease_path):
+		DirAccess.remove_absolute(lease_path)
+	if DirAccess.dir_exists_absolute(first_lock.lock_dir):
+		DirAccess.remove_absolute(first_lock.lock_dir)
+
+func _scenario_output_lock_missing_lease_grace() -> void:
+	scenarios_run += 1
+	var OutputLockScript = load("res://core/api/output_lock.gd")
+	var path: String = repo_root.path_join("out/lock_grace_%d.png" % Time.get_ticks_usec())
+	var lock_dir: String = "%s.lock" % path
+	DirAccess.make_dir_recursive_absolute(lock_dir.get_base_dir())
+	DirAccess.make_dir_absolute(lock_dir)
+	var contender: RefCounted = OutputLockScript.new()
+	var result: Dictionary = contender.acquire(path, 200)
+	_assert(not bool(result.get("success", true)), "fresh lock dir without lease is not immediately stolen")
+	_assert(str(result.get("error", {}).get("code", "")) == "OUTPUT_LOCKED", "missing lease grace code")
+	if DirAccess.dir_exists_absolute(lock_dir):
+		DirAccess.remove_absolute(lock_dir)
 
 func _scenario_aggregate_manifest_write_failure() -> void:
 	scenarios_run += 1
