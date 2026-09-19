@@ -1,13 +1,33 @@
 # Icon Studio
 
-Icon Studio is a standalone Godot 4.x application for turning 3D and static source assets into consistent, production-ready game icons and thumbnails. It is offline-first, deterministic, and designed so an AI agent can operate the same render services as a human using the GUI.
+[![Godot 4.x](https://img.shields.io/badge/Godot-4.x-478CBF?logo=godotengine&logoColor=white)](https://godotengine.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![Offline & deterministic](https://img.shields.io/badge/offline-deterministic-2ea043)](#quality-gate)
 
-The project has no Enigma dependency, no cloud service, and no internal AI model. Its reusable core is organized as:
+**Community-built Godot tooling for consistent game icons and thumbnails at content scale.**
 
-```text
-source loading → inspection → render scene → framing/camera → lighting
-→ image processing → quality checks → PNG export → manifest/cache
-```
+Icon Studio is a standalone Godot 4.x application for turning 3D and static source assets into production-ready PNG imagery. It is offline-first, deterministic, and designed so an AI agent can operate the same render services as a human using the GUI.
+
+![Icon Studio GUI — live preview, preset inspector, and export workflow](docs/assets/icon-studio-ui.png)
+
+## Built for Enigma
+
+This tool was extracted from the content pipeline for **Enigma**, my Godot 3D MMO project. Inventory grids, equipment previews, shop thumbnails, and portrait frames all need the same framing, lighting, and alpha behavior — Icon Studio is the shared render core that makes that repeatable.
+
+The repo has **no runtime dependency** on the game itself: it ships as a standalone studio with its own CLI, presets, validation, and GUI. If you are building a Godot game with lots of item or character art, you can adopt Icon Studio without touching Enigma.
+
+Related open tooling from the same ecosystem: [VFX Forge](https://github.com/Superlapie/VFXForgeEnigma) for real-time VFX authoring.
+
+## Community project
+
+Icon Studio is intentionally open. I want this to become a **badass community-built tool**, not a private pipeline script.
+
+- **Good pull requests get reviewed.** See [CONTRIBUTING.md](CONTRIBUTING.md) for scope, quality gate expectations, and first-contribution ideas.
+- **Discussions are open** for preset design, integration questions, and roadmap ideas: [GitHub Discussions](https://github.com/Superlapie/IconStudioEnigma/discussions).
+- **Issues welcome** for reproducible bugs and focused feature requests.
+
+If Icon Studio saves you time on your Godot project, a star, a preset contribution, or a docs fix helps others find it too.
 
 ## Launch
 
@@ -37,6 +57,17 @@ The included `scripts/iconstudio` wrapper uses a local Godot binary when present
 - Asset-specific `<source_name>.icon.json` overrides, cache keys, safe atomic writes, batch isolation, and JSON manifests.
 - GUI source list, drag-and-drop, preset picker, preview orbit/zoom, structured transform controls, sidecar save, and PNG export.
 
+## Architecture
+
+The project has no cloud service and no internal AI model. Its reusable core is organized as:
+
+```text
+source loading → inspection → render scene → framing/camera → lighting
+→ image processing → quality checks → PNG export → manifest/cache
+```
+
+Both the GUI and CLI call the same shared `RenderService`. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [AGENTS.md](AGENTS.md).
+
 ## Quality gate
 
 ```bash
@@ -61,4 +92,14 @@ See [docs/REAL_MODEL_E2E.md](docs/REAL_MODEL_E2E.md).
 For the full native OS drag/drop protocol proof on Linux/X11, see
 [docs/GUI_E2E.md](docs/GUI_E2E.md).
 
-See [docs/QUICKSTART.md](docs/QUICKSTART.md), [docs/AI_WORKFLOW.md](docs/AI_WORKFLOW.md), and [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md) for the full machine-facing contract.
+## Documentation
+
+- [Quickstart](docs/QUICKSTART.md)
+- [CLI reference](docs/CLI_REFERENCE.md)
+- [AI / machine workflow](docs/AI_WORKFLOW.md)
+- [Preset reference](docs/PRESET_REFERENCE.md)
+- [Contributing](CONTRIBUTING.md)
+
+## License
+
+MIT — see [LICENSE](LICENSE).
