@@ -19,6 +19,7 @@ func run() -> Dictionary:
 	_test_inspection_contract()
 	await _test_fixture_render()
 	await _test_batch_unique_outputs()
+	await _test_batch_manifest_write_failure_accounting()
 	await _test_api_contract()
 	return {"success": failures.is_empty(), "passed": passed, "failures": failures, "summary": {"passed": passed.size(), "failed": failures.size()}}
 
@@ -104,6 +105,33 @@ func _test_batch_unique_outputs() -> void:
 		_assert(str(renders[0].get("output", "")) != str(renders[1].get("output", "")), "same-basename batch uses unique output paths")
 		_assert(FileAccess.file_exists(str(renders[0].get("output", ""))), "first same-basename output exists")
 		_assert(FileAccess.file_exists(str(renders[1].get("output", ""))), "second same-basename output exists")
+
+func _test_batch_manifest_write_failure_accounting() -> void:
+	var service: PresetService = PresetService.new()
+	service.load_all()
+	var preset: PresetDefinition = service.get_preset("weapon")
+	if preset == null:
+		_assert(false, "weapon preset exists for batch manifest failure test")
+		return
+	var stamp: int = Time.get_ticks_usec()
+	var source: String = ProjectSettings.globalize_path("res://fixtures/sword.gltf")
+	var output_dir: String = ProjectSettings.globalize_path("res://out/batch_manifest_fail_%d" % stamp)
+	DirAccess.make_dir_recursive_absolute(output_dir)
+	IconForgeFileUtil.reset_test_seams()
+	IconForgeFileUtil.test_write_json_atomic_error = ERR_CANT_CREATE
+	var result: Dictionary = await BatchService.new().render_sources(
+		[source],
+		preset,
+		output_dir,
+		{"force": true, "manifest": true, "override": {}},
+	)
+	IconForgeFileUtil.reset_test_seams()
+	_assert(not bool(result.get("success", true)), "batch manifest write failure marks batch unsuccessful")
+	_assert(str(result.get("manifest_status", "")) == "failed", "batch manifest status is failed")
+	_assert(str(result.get("manifest", "")).is_empty(), "batch manifest path omitted on failure")
+	_assert(int(result.get("summary", {}).get("failed", -1)) == 0, "render failures stay separate from manifest failure")
+	_assert(int(result.get("summary", {}).get("success", -1)) == 1, "successful renders remain counted")
+	_assert(str(result.get("error", {}).get("code", "")) == "WRITE_FAILED", "batch manifest error code")
 
 func _test_framing_contract() -> void:
 	var service: FramingService = FramingService.new()

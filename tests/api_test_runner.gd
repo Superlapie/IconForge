@@ -42,6 +42,7 @@ func run() -> Dictionary:
 	await _scenario_sidecar_lighting_strictness()
 	await _scenario_source_mutation_invalidates_cache()
 	await _scenario_manifest_commit_failure_blocks_validated()
+	await _scenario_manifest_rollback_failure_surfaces()
 	await _scenario_replace_failure_preserves_destination()
 	await _scenario_portable_default_asset_id()
 	await _scenario_validate_portrait_outputs()
@@ -56,6 +57,7 @@ func run() -> Dictionary:
 	await _scenario_output_lock_dead_pid_reaped()
 	await _scenario_output_lock_token_safe_release()
 	await _scenario_output_lock_missing_lease_grace()
+	await _scenario_output_lock_heartbeat_extends_lease()
 	await _scenario_aggregate_manifest_write_failure()
 	await _scenario_workspace_exclusive_relative_path()
 	await _scenario_sidecar_value_validation()
@@ -677,6 +679,26 @@ func _scenario_manifest_commit_failure_blocks_validated() -> void:
 	_assert(not bool(result.get("success", true)), "manifest failure not validated")
 	_assert(str(result.get("code", "")) == "WRITE_FAILED", "manifest failure code")
 
+func _scenario_manifest_rollback_failure_surfaces() -> void:
+	scenarios_run += 1
+	IconForgeFileUtil.reset_test_seams()
+	api.manifest_service.reset_test_seams()
+	api.manifest_service.test_fail_restore_output = true
+	IconForgeFileUtil.test_write_json_atomic_error = ERR_CANT_CREATE
+	var sword: String = repo_root.path_join("fixtures/sword.gltf")
+	var result: Dictionary = await api.execute({
+		"schema_version": 1,
+		"operation": "render_asset",
+		"asset": sword,
+		"purpose": "inventory_icon",
+		"asset_id": "rollback_failure_probe_%d" % Time.get_ticks_usec(),
+		"force": true,
+	})
+	IconForgeFileUtil.reset_test_seams()
+	api.manifest_service.reset_test_seams()
+	_assert(not bool(result.get("success", true)), "rollback failure not validated")
+	_assert(str(result.get("code", "")) == "ROLLBACK_FAILED", "rollback failure code")
+
 func _scenario_replace_failure_preserves_destination() -> void:
 	scenarios_run += 1
 	IconForgeFileUtil.reset_test_seams()
@@ -870,9 +892,10 @@ func _scenario_output_lock_live_holder_not_reaped_by_age() -> void:
 	lease["acquired_at_ms"] = OutputLock._now_ms() - 999999999
 	lease["heartbeat_at_ms"] = lease["acquired_at_ms"]
 	IconForgeFileUtil.write_json_atomic(lease_path, lease)
+	_assert(holder.heartbeat(), "live holder refreshes stale lease activity")
 	var contender: RefCounted = OutputLockScript.new()
 	var second: Dictionary = contender.acquire(path, 300)
-	_assert(not bool(second.get("success", true)), "live holder is not reaped for ancient timestamp")
+	_assert(not bool(second.get("success", true)), "heartbeat-extended live holder is not reaped")
 	_assert(str(second.get("error", {}).get("code", "")) == "OUTPUT_LOCKED", "live holder stale reap code")
 	holder.release()
 	OutputLock.reset_test_seams()
@@ -915,6 +938,20 @@ func _scenario_output_lock_token_safe_release() -> void:
 		DirAccess.remove_absolute(lease_path)
 	if DirAccess.dir_exists_absolute(first_lock.lock_dir):
 		DirAccess.remove_absolute(first_lock.lock_dir)
+
+func _scenario_output_lock_heartbeat_extends_lease() -> void:
+	scenarios_run += 1
+	var OutputLockScript = load("res://core/api/output_lock.gd")
+	var path: String = repo_root.path_join("out/lock_heartbeat_%d.png" % Time.get_ticks_usec())
+	var holder: RefCounted = OutputLockScript.new()
+	_assert(bool(holder.acquire(path, 500).get("success", false)), "heartbeat holder acquires")
+	var lease_path: String = holder.lock_dir.path_join("lease.json")
+	var lease: Dictionary = IconForgeFileUtil.read_json(lease_path)
+	var before: int = int(lease.get("heartbeat_at_ms", 0))
+	_assert(holder.heartbeat(), "heartbeat updates lease")
+	lease = IconForgeFileUtil.read_json(lease_path)
+	_assert(int(lease.get("heartbeat_at_ms", 0)) >= before, "heartbeat advances activity timestamp")
+	holder.release()
 
 func _scenario_output_lock_missing_lease_grace() -> void:
 	scenarios_run += 1

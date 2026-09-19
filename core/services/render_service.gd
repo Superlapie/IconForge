@@ -50,7 +50,7 @@ func render(source_path: String, preset: PresetDefinition, override: Dictionary 
 		raw_result = _render_static_image(source_path, effective_preset)
 	else:
 		var max_passes: int = int(options.get("max_correction_passes", MAX_CORRECTION_PASSES))
-		raw_result = await _render_3d(source_path, inspection, effective_preset, merged_override, max_passes)
+		raw_result = await _render_3d(source_path, inspection, effective_preset, merged_override, max_passes, options)
 	if not bool(raw_result.get("success", false)):
 		return raw_result
 
@@ -158,7 +158,7 @@ func _fit_static_image(source: Image, target_size: Vector2i, preset: PresetDefin
 	canvas.blend_rect(resized, Rect2i(Vector2i.ZERO, resized.get_size()), offset)
 	return canvas
 
-func _render_3d(source_path: String, inspection: Dictionary, preset: PresetDefinition, override: Dictionary, max_passes: int = MAX_CORRECTION_PASSES) -> Dictionary:
+func _render_3d(source_path: String, inspection: Dictionary, preset: PresetDefinition, override: Dictionary, max_passes: int = MAX_CORRECTION_PASSES, options: Dictionary = {}) -> Dictionary:
 	var tree: SceneTree = Engine.get_main_loop() as SceneTree
 	if tree == null:
 		return {"success": false, "source": source_path, "error": {"code": "RENDER_NO_SCENE_TREE", "message": "Godot scene tree is unavailable for 3D rendering."}}
@@ -176,8 +176,11 @@ func _render_3d(source_path: String, inspection: Dictionary, preset: PresetDefin
 	var last_metrics: Dictionary = {}
 	var passes: int = 0
 	var warnings: Array = []
+	var heartbeat: Callable = options.get("lock_heartbeat", Callable())
 	for pass_index in maxi(1, max_passes):
 		passes = pass_index + 1
+		if heartbeat.is_valid():
+			heartbeat.call()
 		var frame_result: Dictionary = await _render_3d_frame(tree, packed_scene, inspection, preset, params, current_size)
 		if not bool(frame_result.get("success", false)):
 			return frame_result

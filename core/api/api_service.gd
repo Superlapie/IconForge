@@ -182,10 +182,17 @@ func _render_asset_pipeline(request: Dictionary, safe_mode: bool, shared_context
 	var temp_path: String = "%s.pending.%s.%s.%s.png" % [output_path.get_basename(), job_id, str(OS.get_process_id()), str(Time.get_ticks_usec())]
 	var correction_actions: Array = []
 	var max_passes: int = int(purpose_def.get("max_correction_passes", 3))
+	output_lock.heartbeat()
 	var render_result: Dictionary = await render_service.render(
 		source_path, preset, effective_override, temp_path, true,
-		{"skip_sidecar_load": true, "max_correction_passes": max_passes, "precomputed_inspection": inspection}
+		{
+			"skip_sidecar_load": true,
+			"max_correction_passes": max_passes,
+			"precomputed_inspection": inspection,
+			"lock_heartbeat": Callable(output_lock, "heartbeat"),
+		}
 	)
+	output_lock.heartbeat()
 	state = RenderState.RENDERED
 	trace.append(_state_entry(state, {"render_passes": render_result.get("render_passes", 1)}))
 

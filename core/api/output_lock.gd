@@ -13,9 +13,11 @@ var lease_token: String = ""
 var acquired: bool = false
 
 static var test_process_alive_override: Dictionary = {}
+static var test_process_start_ticks_override: Dictionary = {}
 
 static func reset_test_seams() -> void:
 	test_process_alive_override.clear()
+	test_process_start_ticks_override.clear()
 
 static func _now_ms() -> int:
 	return int(Time.get_unix_time_from_system() * 1000.0)
@@ -73,9 +75,11 @@ func _generate_token() -> String:
 
 func _write_lease() -> bool:
 	var now_ms: int = _now_ms()
+	var identity: Dictionary = _process_identity(OS.get_process_id())
 	return _write_lease_payload(lock_dir.path_join("lease.json"), {
 		"token": lease_token,
 		"pid": OS.get_process_id(),
+		"pid_start_ticks": int(identity.get("start_ticks", -1)),
 		"acquired_at_ms": now_ms,
 		"heartbeat_at_ms": now_ms,
 	})
@@ -117,19 +121,23 @@ func _try_reap_stale() -> bool:
 		return false
 	return _remove_lock_dir_unconditional()
 
-func _is_lease_stale(lease: Dictionary) -> bool:
-	var pid: int = int(lease.get("pid", 0))
-	var heartbeat_ms: int = int(lease.get("heartbeat_at_ms", lease.get("acquired_at_ms", 0)))
+func _lease_activity_ms(lease: Dictionary) -> int:
+	var heartbeat_ms: int = int(lease.get("heartbeat_at_ms", 0))
 	var acquired_ms: int = int(lease.get("acquired_at_ms", 0))
-	if acquired_ms <= 0 and heartbeat_ms <= 0:
+	return maxi(heartbeat_ms, acquired_ms)
+
+func _is_lease_stale(lease: Dictionary) -> bool:
+	var activity_ms: int = _lease_activity_ms(lease)
+	if activity_ms <= 0:
 		return _dir_age_ms(lock_dir) >= STALE_MS
-	if pid > 0 and _process_alive(pid):
-		return false
-	if acquired_ms <= 0:
-		acquired_ms = heartbeat_ms
-	if acquired_ms <= 0:
-		return _dir_age_ms(lock_dir) >= STALE_MS
-	return _now_ms() - acquired_ms > STALE_MS
+	var pid: int = int(lease.get("pid", 0))
+	var identity: Dictionary = _process_identity(pid)
+	if identity.get("alive", false):
+		var lease_start: int = int(lease.get("pid_start_ticks", -1))
+		var live_start: int = int(identity.get("start_ticks", -1))
+		if lease_start >= 0 and live_start >= 0 and lease_start != live_start:
+			return true
+	return _now_ms() - activity_ms > STALE_MS
 
 func _dir_age_ms(path: String) -> int:
 	var modified_sec: int = int(FileAccess.get_modified_time(path))
@@ -137,18 +145,46 @@ func _dir_age_ms(path: String) -> int:
 		return 0
 	return max(0, _now_ms() - modified_sec * 1000)
 
-func _process_alive(pid: int) -> bool:
+func _process_identity(pid: int) -> Dictionary:
 	if pid <= 0:
-		return false
+		return {"alive": false, "start_ticks": -1}
 	if test_process_alive_override.has(pid):
-		return bool(test_process_alive_override[pid])
+		return {
+			"alive": bool(test_process_alive_override[pid]),
+			"start_ticks": int(test_process_start_ticks_override.get(pid, _process_start_ticks(pid))),
+		}
 	if pid == OS.get_process_id():
-		return true
-	if OS.get_name() == "Linux":
+		return {"alive": true, "start_ticks": _current_process_start_ticks()}
+	var os_name: String = OS.get_name()
+	if os_name in ["Linux", "macOS", "FreeBSD", "NetBSD", "OpenBSD"]:
 		var output: Array = []
 		var exit_code: int = OS.execute("kill", ["-0", str(pid)], output, true, false)
-		return exit_code == 0
-	return false
+		return {"alive": exit_code == 0, "start_ticks": _process_start_ticks(pid)}
+	if os_name == "Windows":
+		var output: Array = []
+		OS.execute("tasklist", ["/FI", "PID eq %d" % pid, "/NH"], output, true, true)
+		var text: String = "\n".join(PackedStringArray(output))
+		var alive: bool = text.find(str(pid)) >= 0 and text.find("No tasks") < 0
+		return {"alive": alive, "start_ticks": -1}
+	return {"alive": false, "start_ticks": -1}
+
+static func _current_process_start_ticks() -> int:
+	return _process_start_ticks(OS.get_process_id())
+
+static func _process_start_ticks(pid: int) -> int:
+	if pid <= 0 or OS.get_name() != "Linux":
+		return -1
+	var stat_path: String = "/proc/%d/stat" % pid
+	if not FileAccess.file_exists(stat_path):
+		return -1
+	var stat_line: String = FileAccess.get_file_as_string(stat_path)
+	var close_paren: int = stat_line.rfind(")")
+	if close_paren < 0:
+		return -1
+	var fields: PackedStringArray = stat_line.substr(close_paren + 2).split(" ", false)
+	if fields.size() < 20:
+		return -1
+	return int(fields[19])
 
 func _remove_lock_dir_if_token_matches(expected_token: String) -> void:
 	if lock_dir.is_empty() or expected_token.is_empty() or not DirAccess.dir_exists_absolute(lock_dir):

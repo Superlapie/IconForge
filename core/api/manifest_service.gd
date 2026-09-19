@@ -8,6 +8,7 @@ const _Version = preload("res://core/api/icon_forge_version.gd")
 
 var workspace_root: String = ""
 var test_fail_aggregate_write: bool = false
+var test_fail_restore_output: bool = false
 
 func _init(root: String = "") -> void:
 	if root.is_empty():
@@ -29,6 +30,7 @@ func manifest_path_for_job(job_id: String) -> String:
 
 func reset_test_seams() -> void:
 	test_fail_aggregate_write = false
+	test_fail_restore_output = false
 
 func write_manifest(job_id: String, data: Dictionary) -> Dictionary:
 	if test_fail_aggregate_write and str(data.get("operation", "")) == "render_asset_set":
@@ -72,17 +74,21 @@ func commit_validated_render(output_temp_path: String, output_path: String, job_
 
 	var manifest_result: Dictionary = write_manifest(job_id, manifest_payload)
 	if not bool(manifest_result.get("success", false)):
-		_restore_output(output_path, had_output, output_backup_path)
+		var rollback_result: Dictionary = _restore_output(output_path, had_output, output_backup_path)
+		if not bool(rollback_result.get("success", true)):
+			return rollback_result
 		return manifest_result
 
 	var stored: Dictionary = manifest_result.get("manifest", {})
 	var stored_output: Dictionary = stored.get("output", {})
 	if str(stored_output.get("sha256", "")) != output_sha256:
-		_restore_output(output_path, had_output, output_backup_path)
+		var rollback_result: Dictionary = _restore_output(output_path, had_output, output_backup_path)
 		_cleanup_backup(output_backup_path)
 		var mismatched_manifest_path: String = manifest_path_for_job(job_id)
 		if FileAccess.file_exists(mismatched_manifest_path):
 			DirAccess.remove_absolute(mismatched_manifest_path)
+		if not bool(rollback_result.get("success", true)):
+			return rollback_result
 		return {"success": false, "error": {"code": "MANIFEST_MISMATCH", "message": "Committed manifest does not match output hash."}}
 
 	var ownership: Dictionary = {
@@ -98,10 +104,12 @@ func commit_validated_render(output_temp_path: String, output_path: String, job_
 	}
 	var owner_error: Error = IconForgeFileUtil.write_json_atomic(ownership_path(output_path), ownership)
 	if owner_error != OK:
-		_restore_output(output_path, had_output, output_backup_path)
+		var rollback_result: Dictionary = _restore_output(output_path, had_output, output_backup_path)
 		if FileAccess.file_exists(manifest_path_for_job(job_id)):
 			DirAccess.remove_absolute(manifest_path_for_job(job_id))
 		_cleanup_backup(output_backup_path)
+		if not bool(rollback_result.get("success", true)):
+			return rollback_result
 		return {"success": false, "error": {"code": "WRITE_FAILED", "message": "Could not write output ownership record."}}
 
 	_update_output_index(output_path, ownership)
@@ -180,13 +188,34 @@ func _update_output_index(output_path: String, ownership: Dictionary) -> void:
 	}
 	IconForgeFileUtil.write_json_atomic(output_index_path(), index)
 
-func _restore_output(output_path: String, had_output: bool, output_backup_path: String) -> void:
+func _restore_output(output_path: String, had_output: bool, output_backup_path: String) -> Dictionary:
+	if test_fail_restore_output:
+		return {
+			"success": false,
+			"error": {
+				"code": "ROLLBACK_FAILED",
+				"message": "Could not restore previous output after commit failure.",
+				"path": output_path,
+			},
+		}
 	if had_output and not output_backup_path.is_empty() and FileAccess.file_exists(output_backup_path):
 		var restore_error: Error = DirAccess.copy_absolute(output_backup_path, output_path)
-		if restore_error != OK and FileAccess.file_exists(output_path):
-			DirAccess.remove_absolute(output_path)
-	elif FileAccess.file_exists(output_path):
+		if restore_error != OK:
+			if FileAccess.file_exists(output_path):
+				DirAccess.remove_absolute(output_path)
+			return {
+				"success": false,
+				"error": {
+					"code": "ROLLBACK_FAILED",
+					"message": "Could not restore previous output after commit failure.",
+					"path": output_path,
+					"godot_error": restore_error,
+				},
+			}
+		return {"success": true}
+	if FileAccess.file_exists(output_path):
 		DirAccess.remove_absolute(output_path)
+	return {"success": true}
 
 func _cleanup_temp(temp_path: String) -> void:
 	if FileAccess.file_exists(temp_path):

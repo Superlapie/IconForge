@@ -22,6 +22,8 @@ func render_sources(sources: Array, preset: PresetDefinition, output_dir: String
 	var failure_count: int = 0
 	var warning_count: int = 0
 	var manifest_written: bool = false
+	var manifest_status: String = "disabled" if not manifest_enabled else "pending"
+	var manifest_error: Dictionary = {}
 	for source_path in sources:
 		var filename: String = _expand_pattern(pattern, str(source_path), preset.get_id())
 		if filename.get_extension().is_empty():
@@ -56,21 +58,32 @@ func render_sources(sources: Array, preset: PresetDefinition, output_dir: String
 			"summary": {"total": sources.size(), "success": success_count, "failed": failure_count, "warnings": warning_count},
 			"renders": renders
 		}
-		var manifest_error: Error = IconForgeFileUtil.write_json_atomic(manifest_path, manifest)
-		if manifest_error == OK:
+		var write_error: Error = IconForgeFileUtil.write_json_atomic(manifest_path, manifest)
+		if write_error == OK:
 			manifest_written = true
+			manifest_status = "written"
 		else:
-			failure_count += 1
-	return {
-		"success": failure_count == 0,
-		"partial_success": success_count > 0 and failure_count > 0,
+			manifest_status = "failed"
+			manifest_error = {
+				"code": "WRITE_FAILED",
+				"message": "Could not write batch manifest.",
+				"path": manifest_path,
+				"godot_error": write_error,
+			}
+	var result: Dictionary = {
+		"success": failure_count == 0 and manifest_status != "failed",
+		"partial_success": success_count > 0 and (failure_count > 0 or manifest_status == "failed"),
 		"input": input_path,
 		"output": output_dir,
 		"preset": preset.get_id(),
 		"summary": {"total": sources.size(), "success": success_count, "failed": failure_count, "warnings": warning_count},
 		"manifest": manifest_path if manifest_written else "",
-		"renders": renders
+		"manifest_status": manifest_status,
+		"renders": renders,
 	}
+	if manifest_status == "failed":
+		result["error"] = manifest_error
+	return result
 
 func _expand_pattern(pattern: String, source_path: String, preset_id: String) -> String:
 	var source_name: String = IconForgeFileUtil.source_name(source_path)

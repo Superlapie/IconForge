@@ -30,6 +30,7 @@ const CODES: Dictionary = {
 	"QUALITY_FAILED": {"recommended_action": "manual_composition_review", "status": "needs_review"},
 	"FRAMING_UNRESOLVED": {"recommended_action": "manual_composition_review", "status": "needs_review"},
 	"WRITE_FAILED": {"recommended_action": "check_workspace_permissions", "status": "failed"},
+	"ROLLBACK_FAILED": {"recommended_action": "manual_recovery_required", "status": "failed"},
 	"PATH_NOT_ALLOWED": {"recommended_action": "check_workspace_permissions", "status": "failed"},
 	"JOB_CANCELLED": {"recommended_action": "retry_same_request", "status": "failed"},
 	"INTERNAL_ERROR": {"recommended_action": "retry_same_request", "status": "failed"},
