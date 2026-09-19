@@ -13,19 +13,61 @@ fi
 : "${GODOT_LINUX_ARCHIVE:=Godot_v${GODOT_VERSION}_linux.x86_64.zip}"
 : "${GODOT_LINUX_URL:=https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/${GODOT_LINUX_ARCHIVE}}"
 : "${GODOT_LINUX_SHA256:=}"
+: "${GODOT_LINUX_BIN:=Godot_v${GODOT_VERSION}_linux.x86_64}"
+: "${GODOT_WINDOWS_ARCHIVE:=Godot_v${GODOT_VERSION}_win64.exe.zip}"
+: "${GODOT_WINDOWS_URL:=https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/${GODOT_WINDOWS_ARCHIVE}}"
+: "${GODOT_WINDOWS_SHA256:=}"
+: "${GODOT_WINDOWS_BIN:=Godot_v${GODOT_VERSION}_win64.exe}"
+: "${GODOT_MACOS_ARCHIVE:=Godot_v${GODOT_VERSION}_macos.universal.zip}"
+: "${GODOT_MACOS_URL:=https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/${GODOT_MACOS_ARCHIVE}}"
+: "${GODOT_MACOS_SHA256:=}"
+: "${GODOT_MACOS_BIN:=Godot.app/Contents/MacOS/Godot}"
+
+detect_platform() {
+	case "$(uname -s)" in
+		Linux) echo "linux" ;;
+		Darwin) echo "macos" ;;
+		MINGW* | MSYS* | CYGWIN*) echo "windows" ;;
+		*) echo "unknown" ;;
+	esac
+}
+
+verify_sha256() {
+	local expected="$1"
+	local file="$2"
+	if [[ -z "$expected" ]]; then
+		echo "godot-runtime: digest pin missing for archive" >&2
+		return 1
+	fi
+	if command -v sha256sum >/dev/null 2>&1; then
+		echo "$expected  $file" | sha256sum -c - >&2
+	elif command -v shasum >/dev/null 2>&1; then
+		echo "$expected  $file" | shasum -a 256 -c - >&2
+	else
+		echo "godot-runtime: no sha256 verification tool available" >&2
+		return 1
+	fi
+}
 
 godot_bin() {
 	if [[ -n "${ICONFORGE_GODOT:-}" ]]; then
-		echo "$ICONFORGE_GODOT"
+		printf '%s\n' "$ICONFORGE_GODOT"
 		return 0
 	fi
 	if [[ -n "${ICONSTUDIO_GODOT:-}" ]]; then
-		echo "$ICONSTUDIO_GODOT"
+		printf '%s\n' "$ICONSTUDIO_GODOT"
 		return 0
 	fi
-	local local_bin="$ROOT/.tools/godot/Godot_v${GODOT_VERSION}_linux.x86_64"
-	if [[ -x "$local_bin" ]]; then
-		echo "$local_bin"
+	local platform
+	platform="$(detect_platform)"
+	local local_bin=""
+	case "$platform" in
+		linux) local_bin="$ROOT/.tools/godot/$GODOT_LINUX_BIN" ;;
+		windows) local_bin="$ROOT/.tools/godot/$GODOT_WINDOWS_BIN" ;;
+		macos) local_bin="$ROOT/.tools/godot/$GODOT_MACOS_BIN" ;;
+	esac
+	if [[ -n "$local_bin" && -x "$local_bin" ]]; then
+		printf '%s\n' "$local_bin"
 		return 0
 	fi
 	if command -v godot4 >/dev/null 2>&1; then
@@ -42,15 +84,48 @@ godot_bin() {
 install_godot_linux() {
 	local tools_dir="$ROOT/.tools/godot"
 	local archive="/tmp/${GODOT_LINUX_ARCHIVE}"
-	local target="$tools_dir/Godot_v${GODOT_VERSION}_linux.x86_64"
+	local target="$tools_dir/$GODOT_LINUX_BIN"
 	mkdir -p "$tools_dir"
 	curl -fsSL -o "$archive" "$GODOT_LINUX_URL"
-	if [[ -n "$GODOT_LINUX_SHA256" ]]; then
-		echo "$GODOT_LINUX_SHA256  $archive" | sha256sum -c -
-	fi
-	unzip -o "$archive" -d "$tools_dir"
+	verify_sha256 "$GODOT_LINUX_SHA256" "$archive"
+	unzip -qo "$archive" -d "$tools_dir"
 	chmod +x "$target"
-	echo "$target"
+	printf '%s\n' "$target"
+}
+
+install_godot_windows() {
+	local tools_dir="$ROOT/.tools/godot"
+	local archive="/tmp/${GODOT_WINDOWS_ARCHIVE}"
+	local target="$tools_dir/$GODOT_WINDOWS_BIN"
+	mkdir -p "$tools_dir"
+	curl -fsSL -o "$archive" "$GODOT_WINDOWS_URL"
+	verify_sha256 "$GODOT_WINDOWS_SHA256" "$archive"
+	unzip -qo "$archive" -d "$tools_dir"
+	printf '%s\n' "$target"
+}
+
+install_godot_macos() {
+	local tools_dir="$ROOT/.tools/godot"
+	local archive="/tmp/${GODOT_MACOS_ARCHIVE}"
+	local target="$tools_dir/$GODOT_MACOS_BIN"
+	mkdir -p "$tools_dir"
+	curl -fsSL -o "$archive" "$GODOT_MACOS_URL"
+	verify_sha256 "$GODOT_MACOS_SHA256" "$archive"
+	unzip -qo "$archive" -d "$tools_dir"
+	chmod +x "$target"
+	printf '%s\n' "$target"
+}
+
+install_godot() {
+	case "$(detect_platform)" in
+		linux) install_godot_linux ;;
+		windows) install_godot_windows ;;
+		macos) install_godot_macos ;;
+		*)
+			echo "godot-runtime: unsupported platform for install" >&2
+			return 1
+			;;
+	esac
 }
 
 verify_godot() {
@@ -60,7 +135,7 @@ verify_godot() {
 		return 127
 	}
 	"$bin" --version >/dev/null
-	echo "$bin"
+	printf '%s\n' "$bin"
 }
 
 case "${1:-}" in
@@ -68,7 +143,7 @@ case "${1:-}" in
 		godot_bin
 		;;
 	install)
-		install_godot_linux
+		install_godot
 		;;
 	verify)
 		verify_godot

@@ -8,6 +8,8 @@ mkdir -p "$OUT"
 
 REQUEST='{"schema_version":1,"operation":"render_asset","asset":"fixtures/sword.gltf","purpose":"shop_thumbnail","asset_id":"benchmark_probe","force":true}'
 CACHE_REQUEST='{"schema_version":1,"operation":"render_asset","asset":"fixtures/sword.gltf","purpose":"shop_thumbnail","asset_id":"benchmark_probe"}'
+CAPABILITIES='{"schema_version":1,"operation":"capabilities"}'
+SHUTDOWN='{"schema_version":1,"operation":"shutdown"}'
 
 measure() {
 	local label="$1"
@@ -20,15 +22,62 @@ measure() {
 	echo "$label=${ms}ms"
 }
 
-{
-	echo "# Icon Forge service benchmark (informational, not a quality gate)"
-	echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-	measure "cold_cli_render" bash -c "printf '%s\n' '$REQUEST' | $CLI api --stdin --json"
-	measure "warm_cli_cache_hit" bash -c "printf '%s\n' '$CACHE_REQUEST' | $CLI api --stdin --json"
-	SERVICE_REQ=$(mktemp)
-	printf '%s\n' "$REQUEST" "$CACHE_REQUEST" '{"operation":"shutdown"}' >"$SERVICE_REQ"
-	measure "warm_service_render_and_cache" bash -c "$CLI service <'$SERVICE_REQ'"
-	rm -f "$SERVICE_REQ"
-} | tee "$OUT/results.txt"
+python3 - "$CLI" "$REQUEST" "$CACHE_REQUEST" "$CAPABILITIES" "$SHUTDOWN" >"$OUT/results.txt" <<'PY'
+import json
+import subprocess
+import sys
+import time
+
+cli, request, cache_request, capabilities, shutdown = sys.argv[1:6]
+
+def measure_cli(label: str, payload: str) -> None:
+    start = time.perf_counter()
+    proc = subprocess.run(
+        [cli, "api", "--stdin", "--json"],
+        input=payload + "\n",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    elapsed_ms = int((time.perf_counter() - start) * 1000)
+    print(f"{label}={elapsed_ms}ms")
+    if proc.returncode != 0:
+        raise SystemExit(f"{label} failed: {proc.stderr or proc.stdout}")
+
+def measure_service(label: str, proc: subprocess.Popen, payload: str) -> dict:
+    start = time.perf_counter()
+    proc.stdin.write(payload + "\n")
+    proc.stdin.flush()
+    line = proc.stdout.readline()
+    elapsed_ms = int((time.perf_counter() - start) * 1000)
+    print(f"{label}={elapsed_ms}ms")
+    if not line.strip():
+        raise SystemExit(f"{label} returned no response")
+    return json.loads(line)
+
+print("# Icon Forge service benchmark (informational, not a quality gate)")
+print(f"date={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}")
+
+measure_cli("cold_cli_render", request)
+measure_cli("warm_cli_cache_hit", cache_request)
+
+service = subprocess.Popen(
+    [cli, "service"],
+    stdin=subprocess.PIPE,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    text=True,
+    bufsize=1,
+)
+try:
+    measure_service("service_startup_capabilities", service, capabilities)
+    measure_service("service_render_request", service, request)
+    measure_service("service_cache_hit_request", service, cache_request)
+    measure_service("service_shutdown", service, shutdown)
+finally:
+    if service.poll() is None:
+        service.kill()
+    service.wait(timeout=5)
+PY
 
 cat "$OUT/results.txt"

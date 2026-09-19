@@ -14,6 +14,7 @@ var quality: QualityService = QualityService.new()
 var compare: CompareService = CompareService.new()
 var override_service: OverrideService = OverrideService.new()
 const ApiServiceScript = preload("res://core/api/api_service.gd")
+const ApiResponseScript = preload("res://core/api/api_response.gd")
 const IconForgeServiceScript = preload("res://core/service/icon_forge_service.gd")
 
 func run(raw_args: Array[String]) -> int:
@@ -212,27 +213,41 @@ func _service(args: Array[String]) -> int:
 	var workspace_option: String = _option(args, "--workspace-root", "")
 	if not workspace_option.is_empty():
 		workspace_root = workspace_option
+	var stdin_file: FileAccess = _open_service_stdin()
+	if stdin_file == null:
+		var unavailable: Dictionary = ApiResponseScript.failure(
+			"service",
+			"SERVICE_STDIN_UNAVAILABLE",
+			"Service transport requires piped JSON-lines on stdin.",
+		)
+		print(JSON.stringify(unavailable))
+		return EXIT_USAGE
 	var service: RefCounted = IconForgeServiceScript.new(workspace_root)
-	var stdin_text: String = ""
-	if FileAccess.file_exists("/dev/stdin"):
-		var stdin_file: FileAccess = FileAccess.open("/dev/stdin", FileAccess.READ)
-		if stdin_file != null:
-			while not stdin_file.eof_reached():
-				var line: String = stdin_file.get_line()
-				if line.strip_edges().is_empty():
-					continue
-				var parsed: Variant = JSON.parse_string(line)
-				if not parsed is Dictionary:
-					print(JSON.stringify(_error("INVALID_REQUEST", "Service input line was not a JSON object.", {})))
-					continue
-				var request: Dictionary = parsed
-				if str(request.get("operation", "")) == "shutdown":
-					print(JSON.stringify(service.shutdown()))
-					break
-				var result: Dictionary = await service.handle_request(request, safe_mode)
-				print(JSON.stringify(result))
-			stdin_file.close()
+	while not stdin_file.eof_reached():
+		var line: String = stdin_file.get_line()
+		if line.strip_edges().is_empty():
+			continue
+		var parsed: Variant = JSON.parse_string(line)
+		if not parsed is Dictionary:
+			print(JSON.stringify(ApiResponseScript.failure(
+				"service",
+				"INVALID_REQUEST",
+				"Service input line was not a JSON object.",
+			)))
+			continue
+		var request: Dictionary = parsed
+		if str(request.get("operation", "")) == "shutdown":
+			print(JSON.stringify(service.shutdown()))
+			break
+		var result: Dictionary = await service.handle_request(request, safe_mode)
+		print(JSON.stringify(result))
+	stdin_file.close()
 	return EXIT_OK
+
+func _open_service_stdin() -> FileAccess:
+	if FileAccess.file_exists("/dev/stdin"):
+		return FileAccess.open("/dev/stdin", FileAccess.READ)
+	return null
 
 func _validate_output(args: Array[String]) -> int:
 	var output: String = _first_positional(args, 1)

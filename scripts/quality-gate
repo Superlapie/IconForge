@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -u
+set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CLI="$ROOT/scripts/iconforge"
@@ -12,6 +12,13 @@ collect_artifacts() {
 echo "Icon Forge quality gate"
 echo "========================"
 
+mkdir -p "$ROOT/out"
+
+if ! "$ROOT/scripts/gate-selftest"; then
+	echo "FAIL  gate selftest"
+	exit 1
+fi
+
 if "$CLI" --test | tee "$ROOT/out/test-results.json"; then
 	:
 else
@@ -19,8 +26,6 @@ else
 	echo "FAIL  automated Godot tests"
 	collect_artifacts
 fi
-
-mkdir -p "$ROOT/out"
 
 API_CAPABILITIES="$ROOT/out/quality_api_capabilities.json"
 API_RENDER="$ROOT/out/quality_api_render.json"

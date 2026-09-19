@@ -2,6 +2,7 @@ extends RefCounted
 class_name IconForgeService
 
 const _ApiService = preload("res://core/api/api_service.gd")
+const _Response = preload("res://core/api/api_response.gd")
 
 ## Persistent transport wrapper around ApiService. Business logic stays in ApiService.
 
@@ -22,4 +23,4 @@ func handle_request(request: Dictionary, safe_mode: bool = true) -> Dictionary:
 	return response
 
 func shutdown() -> Dictionary:
-	return {"success": true, "status": "shutdown"}
+	return _Response.success("shutdown", {"status": "shutdown"})

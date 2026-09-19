@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+echo "gate-selftest"
+echo "============="
+
+# Regression: pipelines must use pipefail so a failing upstream command is not masked by tee.
+if (set -o pipefail 2>/dev/null; false | tee /dev/null); then
+	echo "FAIL  pipefail did not propagate CLI failure through tee"
+	exit 1
+fi
+
+if ! (set -o pipefail 2>/dev/null; true | tee /dev/null); then
+	echo "FAIL  pipefail blocked a successful pipeline"
+	exit 1
+fi
+
+for script in quality-gate contract-gate; do
+	if ! grep -q 'pipefail' "$ROOT/scripts/$script"; then
+		echo "FAIL  $script does not enable pipefail"
+		exit 1
+	fi
+done
+
+# Simulate the gate pattern: failing CLI piped to tee must set failed=1.
+failed=0
+if false | tee /dev/null; then
+	:
+else
+	failed=1
+fi
+if [[ "$failed" -ne 1 ]]; then
+	echo "FAIL  gate-style pipeline false-passed"
+	exit 1
+fi
+
+# godot-runtime install must emit exactly one stdout line (the executable path).
+if [[ "$(uname -s)" == "Linux" ]] && command -v curl >/dev/null 2>&1 && command -v unzip >/dev/null 2>&1; then
+	GODOT="$("$ROOT/scripts/godot-runtime" install)"
+	if [[ "$GODOT" != *$'\n'* ]] && [[ -x "$GODOT" ]]; then
+		echo "PASS  godot-runtime install stdout contract"
+	else
+		echo "FAIL  godot-runtime install returned multiline or non-executable path"
+		exit 1
+	fi
+else
+	echo "SKIP  godot-runtime install stdout contract (Linux curl/unzip required)"
+fi
+
+echo "PASS  gate-selftest"

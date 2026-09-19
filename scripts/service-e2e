@@ -29,7 +29,9 @@ assert render.get("success") is True, render
 cache = json.loads(lines[2])
 assert cache.get("cache_hit") is True, cache
 shutdown = json.loads(lines[3])
+assert shutdown.get("success") is True, shutdown
 assert shutdown.get("status") == "shutdown", shutdown
+assert shutdown.get("schema_version") == 1, shutdown
 print("service-e2e: PASS")
 PY
 

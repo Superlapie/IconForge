@@ -38,6 +38,7 @@ const CODES: Dictionary = {
 	"DUPLICATE_OUTPUTS": {"recommended_action": "retry_same_request", "status": "failed"},
 	"EMPTY_OUTPUT_LIST": {"recommended_action": "retry_same_request", "status": "failed"},
 	"EXPERT_FIELD_IN_SAFE_MODE": {"recommended_action": "retry_same_request", "status": "failed"},
+	"SERVICE_STDIN_UNAVAILABLE": {"recommended_action": "retry_same_request", "status": "failed"},
 	"JOB_NOT_FOUND": {"recommended_action": "retry_same_request", "status": "failed"},
 	"ASSET_ID_COLLISION": {"recommended_action": "provide_unique_asset_id", "status": "failed"},
 	"MANIFEST_MISMATCH": {"recommended_action": "retry_same_request", "status": "failed"},

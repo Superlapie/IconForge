@@ -3,6 +3,7 @@ class_name IconForgeContractRunner
 
 const _JobIdentity = preload("res://core/api/job_identity.gd")
 const _Schema = preload("res://core/api/api_schema.gd")
+const _AdvisoryIndex = preload("res://core/util/advisory_index.gd")
 const ApiServiceScript = preload("res://core/api/api_service.gd")
 
 var failures: Array = []
@@ -17,6 +18,7 @@ func run() -> Dictionary:
 	_test_encoded_gltf_dependencies()
 	_test_manifest_serialization()
 	_test_cache_record_isolation()
+	_test_cache_legacy_migration()
 	_test_advisory_index_isolation()
 	_test_review_path_contract()
 	return {
@@ -81,6 +83,61 @@ func _test_cache_record_isolation() -> void:
 	_assert(FileAccess.file_exists(ProjectSettings.globalize_path(cache_b._record_path(key_b))), "cache record b file exists")
 	_assert(cache_a._record_path(key_a) != cache_b._record_path(key_b), "cache records use distinct per-key files")
 
+func _test_cache_legacy_migration() -> void:
+	IconForgeFileUtil.reset_test_seams()
+	var legacy_path: String = ProjectSettings.globalize_path("user://iconforge/cache.json")
+	var legacy_dir: String = legacy_path.get_base_dir()
+	var migrated_path: String = "%s.migrated" % legacy_path
+	DirAccess.make_dir_recursive_absolute(legacy_dir)
+	if FileAccess.file_exists(legacy_path):
+		DirAccess.remove_absolute(legacy_path)
+	if FileAccess.file_exists(migrated_path):
+		DirAccess.remove_absolute(migrated_path)
+	var fail_record_path: String = ProjectSettings.globalize_path("user://iconforge/cache/records/%s.json" % CacheService._safe_record_key("legacy_fail_key"))
+	if FileAccess.file_exists(fail_record_path):
+		DirAccess.remove_absolute(fail_record_path)
+	var success_record_path: String = ProjectSettings.globalize_path("user://iconforge/cache/records/%s.json" % CacheService._safe_record_key("legacy_migration_key"))
+	if FileAccess.file_exists(success_record_path):
+		DirAccess.remove_absolute(success_record_path)
+	var output_path: String = ProjectSettings.globalize_path("res://out/cache_legacy_%d.png" % Time.get_ticks_usec())
+	IconForgeFileUtil.write_text_atomic(output_path, "legacy")
+
+	var fail_write_error: Error = IconForgeFileUtil.write_json_atomic(legacy_path, {
+		"legacy_fail_key": {
+			"key": "legacy_fail_key",
+			"source": "fixtures/potion.gltf",
+			"output": output_path,
+			"preset": "consumable",
+			"tool_version": IconForgeVersion.VERSION,
+			"metrics": {},
+		},
+	})
+	_assert(fail_write_error == OK, "legacy cache fixture written for failed migration test")
+	IconForgeFileUtil.test_write_json_atomic_error = ERR_CANT_CREATE
+	CacheService.new()
+	IconForgeFileUtil.reset_test_seams()
+	_assert(FileAccess.file_exists(legacy_path), "legacy cache index kept when migration writes fail")
+	_assert(not FileAccess.file_exists(migrated_path), "legacy cache index not archived on partial migration")
+
+	if FileAccess.file_exists(legacy_path):
+		DirAccess.remove_absolute(legacy_path)
+
+	var legacy_key: String = "legacy_migration_key"
+	IconForgeFileUtil.write_json_atomic(legacy_path, {
+		legacy_key: {
+			"key": legacy_key,
+			"source": "fixtures/sword.gltf",
+			"output": output_path,
+			"preset": "weapon",
+			"tool_version": IconForgeVersion.VERSION,
+			"metrics": {},
+		},
+	})
+	var cache: CacheService = CacheService.new()
+	_assert(FileAccess.file_exists(ProjectSettings.globalize_path(cache._record_path(legacy_key))), "legacy cache entry migrated to per-key record")
+	_assert(not FileAccess.file_exists(legacy_path), "legacy cache index archived after successful migration")
+	_assert(FileAccess.file_exists(migrated_path), "legacy cache index renamed to migrated marker")
+
 func _test_advisory_index_isolation() -> void:
 	var ws: String = ProjectSettings.globalize_path("res://out/advisory_ws_%d" % Time.get_ticks_usec())
 	DirAccess.make_dir_recursive_absolute(ws)
@@ -92,6 +149,22 @@ func _test_advisory_index_isolation() -> void:
 	_assert(bool(first.get("success", false)) and bool(second.get("success", false)), "parallel advisory records persist")
 	_assert(FileAccess.file_exists(queue_a.record_path("review_parallel_a")), "authoritative review a exists")
 	_assert(FileAccess.file_exists(queue_b.record_path("review_parallel_b")), "authoritative review b exists")
+	_assert(FileAccess.file_exists(_AdvisoryIndex.record_path(ws, "reviews", "review_parallel_a")), "advisory review index a exists")
+	_assert(FileAccess.file_exists(_AdvisoryIndex.record_path(ws, "reviews", "review_parallel_b")), "advisory review index b exists")
+
+	var manifest_service: RefCounted = ManifestService.new(ws)
+	var output_path: String = ws.path_join("out/advisory_output.png")
+	DirAccess.make_dir_recursive_absolute(output_path.get_base_dir())
+	IconForgeFileUtil.write_text_atomic(output_path, "probe")
+	manifest_service._update_output_index(output_path, {
+		"job_id": "advisory_output_job",
+		"sha256": "probe",
+		"source": "fixtures/sword.gltf",
+		"purpose": "inventory_icon",
+		"asset_id": "advisory_output_asset",
+		"updated_at": Time.get_datetime_string_from_system(true),
+	})
+	_assert(FileAccess.file_exists(_AdvisoryIndex.record_path(ws, "output", output_path)), "advisory output index record exists")
 
 func _test_review_path_contract() -> void:
 	ReviewQueue.reset_test_seams()

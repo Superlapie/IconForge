@@ -41,7 +41,9 @@ func store(key: String, source_path: String, output_path: String, preset_id: Str
 		"metrics": metrics,
 		"stored_at": Time.get_datetime_string_from_system(true),
 	}
-	IconForgeFileUtil.write_json_atomic(_record_path(key), entry)
+	var write_error: Error = IconForgeFileUtil.write_json_atomic(_record_path(key), entry)
+	if write_error != OK:
+		push_warning("CacheService could not persist cache record for key %s: %s" % [key, write_error])
 
 func clear() -> void:
 	var records_dir: String = ProjectSettings.globalize_path(RECORDS_DIR)
@@ -53,7 +55,14 @@ func clear() -> void:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(LEGACY_INDEX_PATH))
 
 func _record_path(key: String) -> String:
-	return "%s/%s.json" % [RECORDS_DIR, key]
+	return "%s/%s.json" % [RECORDS_DIR, _safe_record_key(key)]
+
+static func _safe_record_key(key: String) -> String:
+	if key.is_empty():
+		return "empty"
+	if key.length() == 64 and key.match("^[a-f0-9]{64}$"):
+		return key
+	return key.sha256_text()
 
 func _read_record(key: String) -> Dictionary:
 	return IconForgeFileUtil.read_json(_record_path(key))
@@ -65,9 +74,10 @@ func _migrate_legacy_index_if_needed() -> void:
 	var legacy_path: String = ProjectSettings.globalize_path(LEGACY_INDEX_PATH)
 	if not FileAccess.file_exists(legacy_path):
 		return
-	var legacy: Dictionary = IconForgeFileUtil.read_json(LEGACY_INDEX_PATH)
+	var legacy: Dictionary = IconForgeFileUtil.read_json(legacy_path)
 	if legacy.is_empty():
 		return
+	var migration_complete: bool = true
 	for key in legacy.keys():
 		var entry: Dictionary = legacy[key]
 		if entry is Dictionary and not _read_record(str(key)).is_empty():
@@ -75,7 +85,13 @@ func _migrate_legacy_index_if_needed() -> void:
 		if entry is Dictionary:
 			var migrated: Dictionary = entry.duplicate(true)
 			migrated["key"] = str(key)
-			IconForgeFileUtil.write_json_atomic(_record_path(str(key)), migrated)
+			var write_error: Error = IconForgeFileUtil.write_json_atomic(_record_path(str(key)), migrated)
+			if write_error != OK:
+				migration_complete = false
+				push_warning("CacheService legacy migration failed for key %s: %s" % [str(key), write_error])
 	var migrated_path: String = "%s.migrated" % legacy_path
-	if not FileAccess.file_exists(migrated_path):
-		DirAccess.rename_absolute(legacy_path, migrated_path)
+	if migration_complete and FileAccess.file_exists(legacy_path):
+		if FileAccess.file_exists(migrated_path):
+			DirAccess.remove_absolute(legacy_path)
+		else:
+			DirAccess.rename_absolute(legacy_path, migrated_path)
