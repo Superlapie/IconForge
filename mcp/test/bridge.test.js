@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { IconForgeClient } from "../dist/iconforge-client.js";
 import { BridgeError } from "../dist/errors.js";
-import { isProcessAlive, pollUntilGone } from "./process-helpers.js";
+import { isProcessAlive, killProcessIfAlive, pollUntilGone } from "./process-helpers.js";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const FAKE = join(ROOT, "fixtures", "fake-iconforge-service.mjs");
@@ -76,27 +76,13 @@ test("shutdown terminates the original MCP-owned child", async () => {
 
 test("forced timeout terminates service and descendant process tree", async () => {
   const client = makeClient({ timeoutMs: 150 });
-  const tree = await client.execute("prepare_process_tree", {});
-  const servicePid = tree.service_pid;
-  const descendantPid = tree.descendant_pid;
-  assert.ok(isProcessAlive(servicePid));
-  assert.ok(isProcessAlive(descendantPid));
-
-  await assert.rejects(
-    () => client.execute("delay", { ms: 5_000 }),
-    (error) => error instanceof BridgeError && error.body.code === "ICONFORGE_SERVICE_TIMEOUT",
-  );
-
-  await pollUntilGone(servicePid);
-  await pollUntilGone(descendantPid);
-});
-
-if (process.platform !== "win32") {
-  test("POSIX SIGTERM-resistant descendant is escalated to SIGKILL", async () => {
-    const client = makeClient({ timeoutMs: 150 });
-    const tree = await client.execute("prepare_process_tree", { mode: "sigterm_resistant" });
-    const servicePid = tree.service_pid;
-    const descendantPid = tree.descendant_pid;
+  let servicePid;
+  let descendantPid;
+  try {
+    const tree = await client.execute("prepare_process_tree", {});
+    servicePid = tree.service_pid;
+    descendantPid = tree.descendant_pid;
+    assert.ok(isProcessAlive(servicePid));
     assert.ok(isProcessAlive(descendantPid));
 
     await assert.rejects(
@@ -105,6 +91,44 @@ if (process.platform !== "win32") {
     );
 
     await pollUntilGone(servicePid);
-    await pollUntilGone(descendantPid, 3_000);
+    await pollUntilGone(descendantPid);
+  } finally {
+    killProcessIfAlive(descendantPid);
+    killProcessIfAlive(servicePid);
+    try {
+      await client.shutdown();
+    } catch {
+      // service may already be forcibly terminated
+    }
+  }
+});
+
+if (process.platform !== "win32") {
+  test("POSIX SIGTERM-resistant descendant is escalated to SIGKILL", async () => {
+    const client = makeClient({ timeoutMs: 150 });
+    let servicePid;
+    let descendantPid;
+    try {
+      const tree = await client.execute("prepare_process_tree", { mode: "sigterm_resistant" });
+      servicePid = tree.service_pid;
+      descendantPid = tree.descendant_pid;
+      assert.ok(isProcessAlive(descendantPid));
+
+      await assert.rejects(
+        () => client.execute("delay", { ms: 5_000 }),
+        (error) => error instanceof BridgeError && error.body.code === "ICONFORGE_SERVICE_TIMEOUT",
+      );
+
+      await pollUntilGone(servicePid);
+      await pollUntilGone(descendantPid, 3_000);
+    } finally {
+      killProcessIfAlive(descendantPid);
+      killProcessIfAlive(servicePid);
+      try {
+        await client.shutdown();
+      } catch {
+        // service may already be forcibly terminated
+      }
+    }
   });
 }

@@ -13,6 +13,17 @@ export function isProcessAlive(pid) {
   }
 }
 
+export function killProcessIfAlive(pid) {
+  if (!pid || pid <= 0 || !isProcessAlive(pid)) {
+    return;
+  }
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch {
+    // already exited or permission denied
+  }
+}
+
 export async function pollUntilGone(pid, timeoutMs = 5_000, intervalMs = 50) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {

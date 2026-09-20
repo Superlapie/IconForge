@@ -7,9 +7,7 @@ import {
   validateOutputInput,
 } from "../dist/tool-schemas.js";
 
-const RENDER_EXPERT_FIELDS = EXPERT_FIELDS.filter((field) => field !== "output");
-
-for (const field of RENDER_EXPERT_FIELDS) {
+for (const field of EXPERT_FIELDS) {
   test(`render_asset rejects expert field ${field}`, () => {
     const result = renderAssetInput.safeParse({
       asset: "fixtures/sword.gltf",

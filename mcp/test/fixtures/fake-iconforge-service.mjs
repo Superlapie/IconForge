@@ -95,7 +95,3 @@ rl.on("line", (line) => {
 });
 
 process.stderr.write("fake service ready\n");
-
-process.on("exit", () => {
-  stopDescendant();
-});

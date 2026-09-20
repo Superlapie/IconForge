@@ -9,6 +9,9 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/).
 ### Fixed
 - MCP forced service process-tree cleanup on timeout, cancellation, and protocol failure (no `child.killed` escalation bug; POSIX process-group SIGTERM/SIGKILL; Windows `taskkill /T`)
 - MCP lifecycle tests now prove the original owned child and descendants actually exit
+- MCP Windows forced cleanup now waits for `taskkill` completion instead of direct-child exit
+- MCP POSIX forced cleanup polls process-group disappearance before/after SIGKILL escalation
+- MCP lifecycle fixture no longer kills descendants on parent exit (tests prove real tree termination)
 
 ### Changed
 - MCP render-schema tests now reject expert fields in Zod input schemas (not misleading tool-name checks)
