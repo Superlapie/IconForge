@@ -15,7 +15,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node --test test/bridge.test.js",
+    "test": "npm run build && node --test test/bridge.test.js test/schema.test.js",
     "test:e2e": "npm run build && node --test test/mcp-e2e.test.js",
     "prepublishOnly": "npm run typecheck && npm run build && npm test"
   },

@@ -6,6 +6,13 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/).
 
 ## Unreleased
 
+### Fixed
+- MCP forced service process-tree cleanup on timeout, cancellation, and protocol failure (no `child.killed` escalation bug; POSIX process-group SIGTERM/SIGKILL; Windows `taskkill /T`)
+- MCP lifecycle tests now prove the original owned child and descendants actually exit
+
+### Changed
+- MCP render-schema tests now reject expert fields in Zod input schemas (not misleading tool-name checks)
+
 ### Added
 - Local stdio MCP adapter (`mcp/`, package `iconforge-mcp` 0.1.0) with safe semantic tools over persistent `iconforge service`
 - Cross-platform service stdin via `OS.read_buffer_from_stdin` and `OS.get_stdin_type()` (Node pipe children on Linux)

@@ -71,6 +71,13 @@ MCP requires Icon Forge **v0.2.0+** (Machine API schema version `1` with persist
 
 The `iconforge-mcp` package is publish-ready but **not published** yet. Future installs may use `npx iconforge-mcp` once released.
 
+## Lifecycle
+
+- Normal shutdown sends the service `shutdown` request and waits briefly before any forced cleanup.
+- Timeout, cancellation, or protocol failure forcibly terminates the entire local Icon Forge service process tree.
+- The next MCP request waits for cleanup to finish, then launches a fresh service child with a new handshake.
+- In-flight requests are never automatically replayed after forced termination.
+
 ## Troubleshooting
 
 - **SERVICE_STDIN_UNAVAILABLE** — upgrade to a build with cross-platform service stdin; ensure MCP spawns `iconforge service` with piped stdin.

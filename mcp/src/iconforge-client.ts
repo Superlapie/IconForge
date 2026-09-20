@@ -1,8 +1,10 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import type { McpConfig } from "./config.js";
 import { BridgeError, isRecord } from "./errors.js";
+import { terminateProcessTree } from "./process-tree.js";
 
 const SUPPORTED_SCHEMA_VERSION = 1;
+const SHUTDOWN_GRACE_MS = 2_000;
 
 export type IconForgeResponse = Record<string, unknown>;
 
@@ -24,6 +26,7 @@ export class IconForgeClient {
   private draining = false;
   private lineWaiter: ((line: string) => void) | null = null;
   private lineRejecter: ((error: Error) => void) | null = null;
+  private terminationPromise: Promise<void> | null = null;
 
   constructor(config: McpConfig) {
     this.config = config;
@@ -48,7 +51,7 @@ export class IconForgeClient {
             this.failActive(
               new BridgeError("ICONFORGE_MCP_CANCELLED", "MCP tool call was cancelled.", "Retry the request."),
             );
-            this.terminateChild("cancelled");
+            void this.terminateChild("cancelled");
           } else {
             const index = this.queue.indexOf(item);
             if (index >= 0) {
@@ -65,16 +68,24 @@ export class IconForgeClient {
   }
 
   async shutdown(): Promise<void> {
-    if (!this.child) {
+    await this.awaitPendingTermination();
+    const child = this.child;
+    if (!child) {
       return;
     }
     try {
       await this.transact({ schema_version: SUPPORTED_SCHEMA_VERSION, operation: "shutdown" });
+      await this.waitForChildExit(child, SHUTDOWN_GRACE_MS);
     } catch {
-      this.terminateChild("shutdown");
+      if (this.config.debug) {
+        console.error("[iconforge] graceful shutdown request failed");
+      }
     }
-    await this.waitForExit(2_000);
-    this.terminateChild("shutdown");
+    if (child.exitCode === null && child.signalCode === null) {
+      await this.terminateChild("shutdown-fallback");
+    } else {
+      this.detachChildState();
+    }
   }
 
   private async drainQueue(): Promise<void> {
@@ -106,28 +117,32 @@ export class IconForgeClient {
   }
 
   private async ensureChild(): Promise<void> {
-    if (this.child && this.child.exitCode === null && !this.child.killed) {
+    await this.awaitPendingTermination();
+    if (this.child && this.child.exitCode === null && this.child.signalCode === null) {
       return;
     }
-    this.child = null;
-    this.handshakeDone = false;
-    this.stdoutBuffer = "";
+    this.detachChildState();
     this.failLineWaiter(
       new BridgeError("ICONFORGE_SERVICE_EXITED", "Icon Forge service is not running.", "Retry the request."),
     );
 
     const args = [...this.config.iconforgeArgs, "--workspace-root", this.config.workspaceRoot];
+    const spawnOptions: Parameters<typeof spawn>[2] = {
+      stdio: ["pipe", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        ICONFORGE_WORKSPACE_ROOT: this.config.workspaceRoot,
+      },
+      shell: false,
+      windowsHide: true,
+    };
+    if (process.platform !== "win32") {
+      spawnOptions.detached = true;
+    }
+
     let child: ChildProcessWithoutNullStreams;
     try {
-      child = spawn(this.config.iconforgeCommand, args, {
-        stdio: ["pipe", "pipe", "pipe"],
-        env: {
-          ...process.env,
-          ICONFORGE_WORKSPACE_ROOT: this.config.workspaceRoot,
-        },
-        shell: false,
-        windowsHide: true,
-      });
+      child = spawn(this.config.iconforgeCommand, args, spawnOptions) as ChildProcessWithoutNullStreams;
     } catch (error) {
       throw new BridgeError(
         "ICONFORGE_NOT_FOUND",
@@ -152,7 +167,7 @@ export class IconForgeClient {
         return;
       }
       if (this.config.debug) {
-        console.error(`[iconforge] child exited code=${code ?? "null"} signal=${signal ?? "null"}`);
+        console.error(`[iconforge] service exited code=${code ?? "null"} signal=${signal ?? "null"}`);
       }
       this.failLineWaiter(
         new BridgeError(
@@ -184,20 +199,19 @@ export class IconForgeClient {
           ),
         );
       }
-      this.child = null;
-      this.handshakeDone = false;
+      this.detachChildState();
     });
 
     this.child = child;
     if (this.config.debug) {
-      console.error(`[iconforge] spawned pid=${child.pid ?? "unknown"} command=${this.config.iconforgeCommand}`);
+      console.error(`[iconforge] spawned service pid=${child.pid ?? "unknown"} command=${this.config.iconforgeCommand}`);
     }
   }
 
   private async performHandshake(): Promise<void> {
     const capabilities = await this.transact({ schema_version: SUPPORTED_SCHEMA_VERSION, operation: "capabilities" });
     if (capabilities.schema_version !== SUPPORTED_SCHEMA_VERSION) {
-      this.terminateChild("incompatible");
+      await this.terminateChild("incompatible");
       throw new BridgeError(
         "ICONFORGE_MCP_INCOMPATIBLE_API",
         `Icon Forge schema_version ${String(capabilities.schema_version)} is not supported (expects ${SUPPORTED_SCHEMA_VERSION}).`,
@@ -227,7 +241,7 @@ export class IconForgeClient {
           { operation },
         ),
       );
-      this.terminateChild("timeout");
+      void this.terminateChild("timeout");
     }, this.config.timeoutMs);
 
     await new Promise<void>((resolve, reject) => {
@@ -255,7 +269,7 @@ export class IconForgeClient {
       }
       return parsed;
     } catch (error) {
-      this.terminateChild("protocol");
+      await this.terminateChild("protocol");
       throw new BridgeError(
         "ICONFORGE_SERVICE_PROTOCOL_ERROR",
         `Icon Forge service returned non-JSON stdout: ${line.slice(0, 200)}`,
@@ -305,7 +319,7 @@ export class IconForgeClient {
         resolve(line);
         return;
       }
-      this.terminateChild("protocol");
+      void this.terminateChild("protocol");
       if (this.config.debug) {
         console.error(`[iconforge] unexpected stdout line: ${line.slice(0, 200)}`);
       }
@@ -345,39 +359,62 @@ export class IconForgeClient {
     }
   }
 
-  private terminateChild(reason: string): void {
-    if (this.config.debug) {
-      console.error(`[iconforge] terminate child (${reason})`);
-    }
-    const child = this.child;
+  private detachChildState(): void {
     this.child = null;
     this.handshakeDone = false;
     this.stdoutBuffer = "";
+  }
+
+  private async awaitPendingTermination(): Promise<void> {
+    if (this.terminationPromise) {
+      await this.terminationPromise;
+    }
+  }
+
+  private async terminateChild(reason: string): Promise<void> {
+    if (this.terminationPromise) {
+      return await this.terminationPromise;
+    }
+
+    const child = this.child;
+    this.detachChildState();
     this.failLineWaiter(
       new BridgeError("ICONFORGE_SERVICE_EXITED", "Icon Forge service was terminated.", "Retry the request."),
     );
-    if (!child || child.killed) {
+
+    if (!child || child.exitCode !== null || child.signalCode !== null) {
       return;
     }
-    child.kill("SIGTERM");
-    setTimeout(() => {
-      if (child.exitCode === null && !child.killed) {
-        child.kill("SIGKILL");
+
+    if (this.config.debug) {
+      console.error(`[iconforge] terminate service tree (${reason}) pid=${child.pid ?? "unknown"}`);
+    }
+
+    this.terminationPromise = terminateProcessTree(child, {
+      reason,
+      debug: this.config.debug,
+    }).finally(() => {
+      this.terminationPromise = null;
+      if (this.config.debug) {
+        console.error(`[iconforge] termination completed (${reason})`);
       }
-    }, 1_000).unref();
+    });
+
+    return await this.terminationPromise;
   }
 
-  private async waitForExit(timeoutMs: number): Promise<void> {
-    const child = this.child;
-    if (!child || child.exitCode !== null) {
+  private async waitForChildExit(child: ChildProcessWithoutNullStreams, timeoutMs: number): Promise<void> {
+    if (child.exitCode !== null || child.signalCode !== null) {
       return;
     }
     await new Promise<void>((resolve) => {
       const timer = setTimeout(resolve, timeoutMs);
-      child.once("exit", () => {
+      const onExit = () => {
         clearTimeout(timer);
         resolve();
-      });
+      };
+      child.once("exit", onExit);
+      child.once("close", onExit);
     });
   }
 }

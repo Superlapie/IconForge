@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
-import { MCP_TOOL_NAMES, EXPERT_FIELDS } from "../dist/tool-schemas.js";
+import { MCP_TOOL_NAMES } from "../dist/tool-schemas.js";
 import { assertWrappedResponse } from "../dist/tool-results.js";
 
 const MCP_ROOT = dirname(fileURLToPath(import.meta.url));
@@ -140,10 +140,4 @@ test("real MCP e2e against Icon Forge service", { timeout: 600_000 }, async () =
     assert.equal(assertWrappedResponse(a.structuredContent).success, true);
     assert.equal(assertWrappedResponse(b.structuredContent).success, true);
   });
-});
-
-test("expert fields are not accepted by MCP schemas", () => {
-  for (const field of EXPERT_FIELDS) {
-    assert.ok(!MCP_TOOL_NAMES.includes(`iconforge_${field}`));
-  }
 });
