@@ -16,12 +16,13 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3 unzip curl
+          sudo apt-get install -y python3 unzip curl xvfb libx11-6 libgl1
 
       - name: Install and verify Godot
         run: |
           chmod +x scripts/godot-runtime
           echo "ICONFORGE_GODOT=$(./scripts/godot-runtime install)" >> "$GITHUB_ENV"
+          ./scripts/godot-runtime bootstrap
 
       - name: Run contract gate
         run: ./scripts/contract-gate
@@ -46,6 +47,7 @@ jobs:
         run: |
           chmod +x scripts/godot-runtime
           echo "ICONFORGE_GODOT=$(./scripts/godot-runtime install)" >> "$GITHUB_ENV"
+          ./scripts/godot-runtime bootstrap
 
       - name: Run contract gate
         shell: bash
@@ -63,6 +65,7 @@ jobs:
         run: |
           chmod +x scripts/godot-runtime
           echo "ICONFORGE_GODOT=$(./scripts/godot-runtime install)" >> "$GITHUB_ENV"
+          ./scripts/godot-runtime bootstrap
 
       - name: Run contract gate
         shell: bash

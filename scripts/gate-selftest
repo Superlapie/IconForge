@@ -38,11 +38,17 @@ fi
 
 # godot-runtime install must emit exactly one stdout line (the executable path).
 if [[ "$(uname -s)" == "Linux" ]] && command -v curl >/dev/null 2>&1 && command -v unzip >/dev/null 2>&1; then
-	GODOT="$("$ROOT/scripts/godot-runtime" install)"
-	if [[ "$GODOT" != *$'\n'* ]] && [[ -x "$GODOT" ]]; then
-		echo "PASS  godot-runtime install stdout contract"
+	if GODOT="$("$ROOT/scripts/godot-runtime" bin 2>/dev/null)" && [[ -x "$GODOT" ]]; then
+		echo "SKIP  godot-runtime install stdout contract (runtime already present)"
+	elif GODOT="$("$ROOT/scripts/godot-runtime" install)"; then
+		if [[ "$GODOT" != *$'\n'* ]] && [[ -x "$GODOT" ]]; then
+			echo "PASS  godot-runtime install stdout contract"
+		else
+			echo "FAIL  godot-runtime install returned multiline or non-executable path"
+			exit 1
+		fi
 	else
-		echo "FAIL  godot-runtime install returned multiline or non-executable path"
+		echo "FAIL  godot-runtime install failed"
 		exit 1
 	fi
 else

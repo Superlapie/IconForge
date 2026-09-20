@@ -36,6 +36,14 @@ else
 fi
 
 cd "$ROOT"
+if ! "$ROOT/scripts/godot-runtime" bootstrap; then
+	if [[ " $* " == *" --json "* ]]; then
+		runtime_error_json "Godot project bootstrap failed. Run ./scripts/godot-runtime bootstrap."
+	else
+		echo "Godot project bootstrap failed. Run ./scripts/godot-runtime bootstrap." >&2
+	fi
+	exit 127
+fi
 if [[ " $* " == *" --json "* ]]; then
 	stderr_file="$(mktemp)"
 	stdout_file="$(mktemp)"
