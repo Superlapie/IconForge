@@ -43,11 +43,13 @@ Out of scope or usually treated as bugs rather than security issues:
 - Godot parses and renders supplied assets; treat untrusted assets as untrusted input to a native parser/renderer.
 - Safe mode restricts output destinations and rejects renderer-control fields.
 - Expert mode and maintainer tooling expose broader capabilities and should only be used by trusted humans or authorized debug tooling.
-- Future network or MCP transports must preserve the same safe-mode boundary: transport adapters may not reintroduce renderer controls or arbitrary output paths.
+- The local MCP adapter (`mcp/`) is stdio-only, runs with the user's OS permissions, and exposes safe-mode semantic tools only. It must not reintroduce renderer controls or arbitrary output paths.
+- MCP is not a sandbox: Godot still parses supplied assets locally.
 
 ## Dependency Surface
 
 - Godot Engine runtime (pinned in `build/godot.env` for Linux CI/bootstrap)
 - Python 3 for examples, E2E helpers, and CI scripts only
+- Node.js 20+ for the optional local MCP adapter (`mcp/`) only
 
 No network access is required for normal offline rendering once the runtime is installed.

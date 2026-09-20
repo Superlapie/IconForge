@@ -102,7 +102,7 @@ The included `scripts/iconforge` wrapper uses a local Godot binary when present 
 | Full render + GUI quality gate | Yes (`./scripts/quality-gate`) | No | No |
 | Contract gate (API, identity, paths, manifests) | Yes | Yes | Yes |
 | Persistent `service` transport | Yes | Best effort | Best effort |
-| MCP server | Planned — see `mcp/README.md` | Planned | Planned |
+| Local MCP (`mcp/`, stdio) | Yes (contract + E2E) | Contract smoke | Contract smoke |
 
 **What `validated` means:** the output passed the production contract for the requested purpose, was committed transactionally with manifest + owner records, and is tied to current source/dependency identity. It does not guarantee artistic perfection.
 

@@ -24,4 +24,4 @@ Requests inside one Godot process are serialized intentionally. Multiple agents 
 
 ## MCP
 
-A future MCP adapter must map tools directly to semantic Machine API operations without duplicating validation or rendering logic. See `mcp/README.md` for the planned mapping.
+The local MCP adapter (`mcp/`) forwards tool calls to this transport. See [MCP.md](MCP.md).

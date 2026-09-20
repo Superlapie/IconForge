@@ -36,6 +36,40 @@ else
 fi
 
 cd "$ROOT"
+
+# Service transport: stdout must contain only JSON-lines (no Godot banner).
+_filter_service_stdout() {
+	python3 -c '
+import json, sys
+for raw in sys.stdin:
+    line = raw.rstrip("\r\n")
+    if not line.strip():
+        continue
+    try:
+        json.loads(line)
+    except json.JSONDecodeError:
+        print(line, file=sys.stderr, flush=True)
+        continue
+    print(line, flush=True)
+'
+}
+
+if [[ "${1:-}" == "service" ]]; then
+	if ! "$ROOT/scripts/godot-runtime" bootstrap; then
+		echo "Godot project bootstrap failed. Run ./scripts/godot-runtime bootstrap." >&2
+		exit 127
+	fi
+	_run_service() {
+		if command -v xvfb-run >/dev/null 2>&1; then
+			xvfb-run -a "$GODOT_BIN" --path "$ROOT" --display-driver x11 --rendering-method gl_compatibility --audio-driver Dummy --disable-vsync -- --cli "$@" 2>&1
+		else
+			"$GODOT_BIN" --headless --path "$ROOT" --rendering-method gl_compatibility --audio-driver Dummy -- --cli "$@" 2>&1
+		fi
+	}
+	_run_service service "${@:2}" | _filter_service_stdout
+	exit "${PIPESTATUS[0]}"
+fi
+
 if ! "$ROOT/scripts/godot-runtime" bootstrap; then
 	if [[ " $* " == *" --json "* ]]; then
 		runtime_error_json "Godot project bootstrap failed. Run ./scripts/godot-runtime bootstrap."

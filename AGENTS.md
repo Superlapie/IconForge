@@ -11,7 +11,7 @@
 - **NEVER** invent camera, lighting, occupancy, or framing values.
 - **NEVER** retry `needs_review` by guessing renderer parameters.
 
-Transport: `api --request FILE --json` (or the official [examples/enigma_client.py](examples/enigma_client.py) wrapper).
+Transport: `api --request FILE --json`, persistent `iconforge service` JSONL, or the local MCP adapter (`mcp/`) — all thin transports over `ApiService`.
 
 Workspace: set `ICONFORGE_WORKSPACE_ROOT` or pass `--workspace-root` so generated artifacts land in the caller project (not only this repository). Relative asset paths are workspace-exclusive; use `res://` only for intentional tool-repository resources.
 
@@ -82,6 +82,12 @@ Preset JSON, expert CLI, GUI workflows, and batch manifests are documented under
 - Keep canonical preset fields in JSON and shared behavior in `core/` services.
 - Do not bypass `ApiService`, `RenderService`, `PresetDefinition`, `AssetInspector`, or `QualityService`.
 - Run `./scripts/quality-gate` after changes to rendering, presets, CLI, fixtures, API, or output validation.
+
+## MCP (transport only)
+
+- MCP tools map 1:1 to safe-mode Machine API operations; never expose expert fields (`yaw`, `fov`, `preset`, arbitrary `output`).
+- MCP stdout is protocol-only; Icon Forge `service` stdout is JSON-lines only.
+- Do not duplicate rendering, validation, or provenance logic in TypeScript.
 
 ## Canonical quality command
 

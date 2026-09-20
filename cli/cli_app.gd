@@ -213,8 +213,7 @@ func _service(args: Array[String]) -> int:
 	var workspace_option: String = _option(args, "--workspace-root", "")
 	if not workspace_option.is_empty():
 		workspace_root = workspace_option
-	var stdin_file: FileAccess = _open_service_stdin()
-	if stdin_file == null:
+	if not _service_stdin_available():
 		var unavailable: Dictionary = ApiResponseScript.failure(
 			"service",
 			"SERVICE_STDIN_UNAVAILABLE",
@@ -222,12 +221,20 @@ func _service(args: Array[String]) -> int:
 		)
 		print(JSON.stringify(unavailable))
 		return EXIT_USAGE
+	_service_stdin_buffer = ""
+	if OS.get_stdin_type() == OS.STD_HANDLE_FILE:
+		_service_stdin_file = _open_service_stdin_file()
+	else:
+		_service_stdin_file = null
 	var service: RefCounted = IconForgeServiceScript.new(workspace_root)
-	while not stdin_file.eof_reached():
-		var line: String = stdin_file.get_line()
-		if line.strip_edges().is_empty():
+	while true:
+		var line: Variant = _read_service_line()
+		if line == null:
+			break
+		var line_text: String = str(line)
+		if line_text.strip_edges().is_empty():
 			continue
-		var parsed: Variant = JSON.parse_string(line)
+		var parsed: Variant = JSON.parse_string(line_text)
 		if not parsed is Dictionary:
 			print(JSON.stringify(ApiResponseScript.failure(
 				"service",
@@ -241,11 +248,53 @@ func _service(args: Array[String]) -> int:
 			break
 		var result: Dictionary = await service.handle_request(request, safe_mode)
 		print(JSON.stringify(result))
-	stdin_file.close()
+	if _service_stdin_file != null:
+		_service_stdin_file.close()
+		_service_stdin_file = null
 	return EXIT_OK
 
-func _open_service_stdin() -> FileAccess:
-	if FileAccess.file_exists("/dev/stdin"):
+func _service_stdin_available() -> bool:
+	var stdin_type: int = OS.get_stdin_type()
+	match stdin_type:
+		OS.STD_HANDLE_PIPE, OS.STD_HANDLE_CONSOLE, OS.STD_HANDLE_FILE, OS.STD_HANDLE_UNKNOWN:
+			return true
+		OS.STD_HANDLE_INVALID:
+			# Node-spawned service children on Linux may report INVALID while stdin is still a pipe.
+			return OS.get_name() != "Windows"
+		_:
+			return false
+
+var _service_stdin_buffer: String = ""
+var _service_stdin_file: FileAccess = null
+
+func _read_service_line() -> Variant:
+	if _service_stdin_file != null:
+		if _service_stdin_file.eof_reached():
+			return null
+		var file_line: String = _service_stdin_file.get_line()
+		if file_line.ends_with("\r"):
+			file_line = file_line.substr(0, file_line.length() - 1)
+		return file_line
+	while true:
+		var newline_index: int = _service_stdin_buffer.find("\n")
+		if newline_index >= 0:
+			var buffered_line: String = _service_stdin_buffer.substr(0, newline_index)
+			_service_stdin_buffer = _service_stdin_buffer.substr(newline_index + 1)
+			if buffered_line.ends_with("\r"):
+				buffered_line = buffered_line.substr(0, buffered_line.length() - 1)
+			return buffered_line
+		var chunk: PackedByteArray = OS.read_buffer_from_stdin(1)
+		if chunk.is_empty():
+			if _service_stdin_buffer.is_empty():
+				return null
+			var remaining: String = _service_stdin_buffer
+			_service_stdin_buffer = ""
+			return remaining
+		_service_stdin_buffer += chunk.get_string_from_utf8()
+	return null
+
+func _open_service_stdin_file() -> FileAccess:
+	if OS.get_name() != "Windows" and FileAccess.file_exists("/dev/stdin"):
 		return FileAccess.open("/dev/stdin", FileAccess.READ)
 	return null
 

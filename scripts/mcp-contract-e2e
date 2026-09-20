@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+MCP="$ROOT/mcp"
+ARTIFACTS="$ROOT/out/ci-artifacts/mcp-contract"
+
+mkdir -p "$ARTIFACTS"
+
+echo "Icon Forge MCP contract e2e"
+echo "============================"
+
+cd "$MCP"
+npm ci
+npm run typecheck
+npm run build
+npm test 2>&1 | tee "$ARTIFACTS/mcp-unit-tests.log"
+
+REQUEST_FILE="$(mktemp)"
+printf '%s\n' '{"schema_version":1,"operation":"capabilities"}' '{"schema_version":1,"operation":"shutdown"}' >"$REQUEST_FILE"
+SERVICE_OUT="$(mktemp)"
+"$ROOT/scripts/iconforge" service <"$REQUEST_FILE" >"$SERVICE_OUT"
+
+python3 - "$SERVICE_OUT" <<'PY'
+import json, sys
+lines = [line.rstrip("\r\n") for line in open(sys.argv[1]) if line.strip()]
+for index, line in enumerate(lines, start=1):
+    try:
+        json.loads(line)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"service stdout line {index} is not JSON: {line[:200]}") from exc
+print("service stdout purity: PASS")
+PY
+
+cp "$SERVICE_OUT" "$ARTIFACTS/service-smoke.jsonl"
+rm -f "$REQUEST_FILE" "$SERVICE_OUT"
+
+echo "PASS  MCP contract e2e"

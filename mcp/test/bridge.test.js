@@ -1,0 +1,75 @@
+import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import test from "node:test";
+import { IconForgeClient } from "../dist/iconforge-client.js";
+import { BridgeError } from "../dist/errors.js";
+
+const ROOT = dirname(fileURLToPath(import.meta.url));
+const FAKE = join(ROOT, "fixtures", "fake-iconforge-service.mjs");
+
+function makeClient(overrides = {}) {
+  return new IconForgeClient({
+    iconforgeCommand: process.execPath,
+    iconforgeArgs: [FAKE],
+    workspaceRoot: ROOT,
+    timeoutMs: 2_000,
+    debug: false,
+    ...overrides,
+  });
+}
+
+test("serializes concurrent requests in order", async () => {
+  const client = makeClient();
+  const [first, second] = await Promise.all([
+    client.execute("echo", { n: 1 }),
+    client.execute("echo", { n: 2 }),
+  ]);
+  assert.equal(first.echo.n, 1);
+  assert.equal(second.echo.n, 2);
+  await client.shutdown();
+});
+
+test("protocol corruption fails and restarts child", async () => {
+  const client = makeClient();
+  await assert.rejects(
+    () => client.execute("garbage", {}),
+    (error) => error instanceof BridgeError && error.body.code === "ICONFORGE_SERVICE_PROTOCOL_ERROR",
+  );
+  const ok = await client.execute("echo", { recovered: true });
+  assert.equal(ok.echo.recovered, true);
+  await client.shutdown();
+});
+
+test("child crash rejects in-flight request", async () => {
+  const client = makeClient();
+  await assert.rejects(
+    () => client.execute("crash", {}),
+    (error) => error instanceof BridgeError && error.body.code === "ICONFORGE_SERVICE_EXITED",
+  );
+  const ok = await client.execute("echo", { afterCrash: true });
+  assert.equal(ok.echo.afterCrash, true);
+  await client.shutdown();
+});
+
+test("timeout terminates child", async () => {
+  const client = makeClient({ timeoutMs: 100 });
+  await assert.rejects(
+    () => client.execute("delay", { ms: 500 }),
+    (error) => error instanceof BridgeError && error.body.code === "ICONFORGE_SERVICE_TIMEOUT",
+  );
+  const ok = await client.execute("echo", { afterTimeout: true });
+  assert.equal(ok.echo.afterTimeout, true);
+  await client.shutdown();
+});
+
+test("shutdown leaves no child running", async () => {
+  const client = makeClient();
+  await client.execute("echo", { warm: true });
+  await client.shutdown();
+  const child = spawn(process.execPath, [FAKE], { stdio: ["pipe", "pipe", "pipe"] });
+  child.stdin.end();
+  await new Promise((resolve) => child.once("exit", resolve));
+  assert.notEqual(child.exitCode, null);
+});

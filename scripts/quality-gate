@@ -98,6 +98,14 @@ else
 	collect_artifacts
 fi
 
+if "$ROOT/scripts/mcp-e2e"; then
+	:
+else
+	failed=1
+	echo "FAIL  MCP full e2e"
+	collect_artifacts
+fi
+
 for preset in "$ROOT"/presets/*.json; do
 	if "$CLI" validate-preset "$preset" --json >/dev/null; then
 		:

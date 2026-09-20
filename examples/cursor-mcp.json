@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "iconforge": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "/ABSOLUTE/PATH/TO/IconForgeEnigma/mcp/dist/index.js",
+        "--iconforge-root",
+        "/ABSOLUTE/PATH/TO/IconForgeEnigma",
+        "--workspace-root",
+        "${workspaceFolder}"
+      ],
+      "env": {
+        "ICONFORGE_ROOT": "/ABSOLUTE/PATH/TO/IconForgeEnigma",
+        "ICONFORGE_WORKSPACE_ROOT": "${workspaceFolder}"
+      }
+    }
+  }
+}

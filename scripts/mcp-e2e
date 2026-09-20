@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+MCP="$ROOT/mcp"
+ARTIFACTS="$ROOT/out/ci-artifacts/mcp-e2e"
+
+mkdir -p "$ARTIFACTS"
+
+echo "Icon Forge MCP full e2e"
+echo "========================"
+
+cd "$MCP"
+npm ci
+npm run build
+node --test test/mcp-e2e.test.js 2>&1 | tee "$ARTIFACTS/mcp-e2e.log"
+
+echo "PASS  MCP full e2e"

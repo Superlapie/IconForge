@@ -1,0 +1,34 @@
+{
+  "name": "iconforge-mcp",
+  "version": "0.1.0",
+  "description": "Local stdio MCP adapter for Icon Forge semantic Machine API",
+  "type": "module",
+  "license": "SEE LICENSE IN LICENSE",
+  "bin": {
+    "iconforge-mcp": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test test/bridge.test.js",
+    "test:e2e": "npm run build && node --test test/mcp-e2e.test.js",
+    "prepublishOnly": "npm run typecheck && npm run build && npm test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.0.0",
+    "zod": "^4.2.0"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "2.0.0",
+    "@types/node": "22.18.6",
+    "typescript": "5.9.3"
+  }
+}

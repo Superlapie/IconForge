@@ -20,15 +20,23 @@ EOF
 
 python3 - "$RESPONSE_FILE" <<'PY'
 import json, sys
-lines = [line for line in open(sys.argv[1]) if line.strip().startswith("{")]
-assert len(lines) >= 4, f"expected 4 service responses, got {len(lines)}"
-caps = json.loads(lines[0])
+raw_lines = [line.rstrip("\r\n") for line in open(sys.argv[1])]
+non_empty = [line for line in raw_lines if line.strip()]
+assert non_empty, "service stdout was empty"
+parsed = []
+for index, line in enumerate(non_empty):
+    try:
+        parsed.append(json.loads(line))
+    except json.JSONDecodeError as exc:
+        raise AssertionError(f"line {index + 1} is not valid JSON: {line[:200]}") from exc
+assert len(parsed) >= 4, f"expected at least 4 service responses, got {len(parsed)}"
+caps = parsed[0]
 assert caps.get("success") is True, caps
-render = json.loads(lines[1])
+render = parsed[1]
 assert render.get("success") is True, render
-cache = json.loads(lines[2])
+cache = parsed[2]
 assert cache.get("cache_hit") is True, cache
-shutdown = json.loads(lines[3])
+shutdown = parsed[3]
 assert shutdown.get("success") is True, shutdown
 assert shutdown.get("status") == "shutdown", shutdown
 assert shutdown.get("schema_version") == 1, shutdown

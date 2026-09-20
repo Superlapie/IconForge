@@ -24,6 +24,26 @@ if (-not $GodotCandidates -or $GodotCandidates.Count -eq 0) {
 
 $Godot = $GodotCandidates[0]
 Set-Location $Root
+
+function Filter-ServiceStdout {
+    $input | ForEach-Object {
+        $line = $_.TrimEnd("`r")
+        if ([string]::IsNullOrWhiteSpace($line)) { return }
+        try {
+            $null = $line | ConvertFrom-Json
+            $line
+        } catch {
+            [Console]::Error.WriteLine($line)
+        }
+    }
+}
+
+if ($Args.Count -gt 0 -and $Args[0] -eq "service") {
+    $GodotArgs = @("--path", $Root, "--headless", "--rendering-method", "gl_compatibility", "--audio-driver", "Dummy", "--", "--cli") + $Args
+    & $Godot @GodotArgs 2>&1 | Filter-ServiceStdout
+    exit $LASTEXITCODE
+}
+
 $GodotArgs = @("--path", $Root, "--headless", "--rendering-method", "gl_compatibility", "--audio-driver", "Dummy", "--", "--cli") + $Args
 & $Godot @GodotArgs
 exit $LASTEXITCODE

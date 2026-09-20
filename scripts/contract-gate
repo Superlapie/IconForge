@@ -45,6 +45,14 @@ else
 	collect_artifacts
 fi
 
+if "$ROOT/scripts/mcp-contract-e2e"; then
+	:
+else
+	failed=1
+	echo "FAIL  MCP contract e2e"
+	collect_artifacts
+fi
+
 if [[ "$failed" -eq 0 ]]; then
 	echo "PASS  contract gate"
 	exit 0

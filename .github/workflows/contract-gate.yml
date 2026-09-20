@@ -18,6 +18,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y python3 unzip curl xvfb libx11-6 libgl1
 
+      - name: Setup Node.js
+        uses: actions/setup-node@39370e3970a6d9acfc8fe86f7b93f4a1b5f1c47c # v4.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mcp/package-lock.json
+
       - name: Install and verify Godot
         run: |
           chmod +x scripts/godot-runtime
@@ -42,6 +49,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
+      - name: Setup Node.js
+        uses: actions/setup-node@39370e3970a6d9acfc8fe86f7b93f4a1b5f1c47c # v4.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mcp/package-lock.json
+
       - name: Install Godot
         shell: bash
         run: |
@@ -59,6 +73,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@39370e3970a6d9acfc8fe86f7b93f4a1b5f1c47c # v4.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mcp/package-lock.json
 
       - name: Install Godot
         shell: bash

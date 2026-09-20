@@ -6,6 +6,13 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/).
 
 ## Unreleased
 
+### Added
+- Local stdio MCP adapter (`mcp/`, package `iconforge-mcp` 0.1.0) with safe semantic tools over persistent `iconforge service`
+- Cross-platform service stdin via `OS.read_buffer_from_stdin` and `OS.get_stdin_type()` (Node pipe children on Linux)
+- Service stdout JSON purity filtering in `scripts/iconforge` / `scripts/iconforge.ps1`
+- MCP bridge unit tests, full MCP client E2E, `scripts/mcp-contract-e2e`, `scripts/mcp-e2e`
+- Cursor configuration example at `examples/cursor-mcp.json` and `docs/MCP.md`
+
 ## 0.2.0 — 2026-09-19
 
 Hardened Machine API beta and product maturity release.
