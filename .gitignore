@@ -1,5 +1,7 @@
 .godot/
 .tools/
+__pycache__/
+*.py[cod]
 out/*
 !out/.gitkeep
 generated/
