@@ -16,7 +16,7 @@ jobs:
       - name: Install display and Python
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb libx11-6 libgl1 python3 unzip curl
+          sudo apt-get install -y xvfb libx11-6 libgl1 python3 unzip curl ripgrep
 
       - name: Install and verify Godot
         run: |
