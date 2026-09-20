@@ -19,7 +19,7 @@ jobs:
           sudo apt-get install -y xvfb libx11-6 libgl1 python3 unzip curl ripgrep
 
       - name: Setup Node.js
-        uses: actions/setup-node@39370e3970a6d9acfc8fe86f7b93f4a1b5f1c47c # v4.1.0
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
           node-version: "22"
           cache: npm
