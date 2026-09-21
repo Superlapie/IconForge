@@ -41,8 +41,8 @@ Exact scope, pricing, support, and sublicensing terms are negotiated per custome
 
 Contact **Superlapie**:
 
-- Open a [GitHub Discussion](https://github.com/Superlapie/IconForgeEnigma/discussions) with the category **Q&A** or **General**, or
-- Open a [GitHub Issue](https://github.com/Superlapie/IconForgeEnigma/issues) titled `Commercial license inquiry`
+- Open a [GitHub Discussion](https://github.com/Superlapie/IconForge/discussions) with the category **Q&A** or **General**, or
+- Open a [GitHub Issue](https://github.com/Superlapie/IconForge/issues) titled `Commercial license inquiry`
 
 Include:
 

@@ -88,5 +88,5 @@ The `iconforge-mcp` package is publish-ready but **not published** yet. Future i
 
 ```bash
 cd mcp && npm run build
-npx @modelcontextprotocol/inspector node dist/index.js --iconforge-root /path/to/IconForgeEnigma --workspace-root /path/to/your/game
+npx @modelcontextprotocol/inspector node dist/index.js --iconforge-root /path/to/IconForge --workspace-root /path/to/your/game
 ```

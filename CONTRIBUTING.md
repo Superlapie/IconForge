@@ -58,4 +58,4 @@ Be direct, be kind, and optimize for maintainability. Disagreement is fine; hara
 
 ## Questions
 
-Open a [Discussion](https://github.com/Superlapie/IconForgeEnigma/discussions) for design questions, preset ideas, or agent integration help. Use [Issues](https://github.com/Superlapie/IconForgeEnigma/issues) for reproducible bugs and feature requests.
+Open a [Discussion](https://github.com/Superlapie/IconForge/discussions) for design questions, preset ideas, or agent integration help. Use [Issues](https://github.com/Superlapie/IconForge/issues) for reproducible bugs and feature requests.

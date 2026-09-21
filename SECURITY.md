@@ -12,7 +12,7 @@ Icon Forge is a local/offline asset rendering tool. It processes user-supplied m
 
 ## Reporting a Vulnerability
 
-Please report security issues privately using [GitHub Security Advisories](https://github.com/Superlapie/IconForgeEnigma/security/advisories/new) for this repository.
+Please report security issues privately using [GitHub Security Advisories](https://github.com/Superlapie/IconForge/security/advisories/new) for this repository.
 
 Do not open public issues for exploitable vulnerabilities.
 

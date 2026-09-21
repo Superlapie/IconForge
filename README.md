@@ -59,14 +59,14 @@ This tool was extracted from the content pipeline for **Enigma**, my Godot 3D MM
 
 The repo has **no runtime dependency** on the game itself: it ships as a standalone tool with its own machine API, CLI, presets, validation, and GUI. If you are building a Godot game with lots of item or character art, you can adopt Icon Forge without touching Enigma.
 
-Related open tooling from the same ecosystem: [VFX Forge](https://github.com/Superlapie/VFXForgeEnigma) for real-time VFX authoring.
+Related open tooling from the same ecosystem: [VFX Forge](https://github.com/Superlapie/VFXForge) for real-time VFX authoring.
 
 ## Community project
 
 Icon Forge is intentionally open. I want this to become a **badass community-built tool**, not a private pipeline script.
 
 - **Good pull requests get reviewed.** See [CONTRIBUTING.md](CONTRIBUTING.md) for scope, quality gate expectations, and first-contribution ideas.
-- **Discussions are open** for preset design, integration questions, and roadmap ideas: [GitHub Discussions](https://github.com/Superlapie/IconForgeEnigma/discussions).
+- **Discussions are open** for preset design, integration questions, and roadmap ideas: [GitHub Discussions](https://github.com/Superlapie/IconForge/discussions).
 - **Issues welcome** for reproducible bugs and focused feature requests.
 
 If Icon Forge saves you time on your Godot project, a star, a preset contribution, or a docs fix helps others find it too.

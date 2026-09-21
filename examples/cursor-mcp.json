@@ -4,14 +4,14 @@
       "type": "stdio",
       "command": "node",
       "args": [
-        "/ABSOLUTE/PATH/TO/IconForgeEnigma/mcp/dist/index.js",
+        "/ABSOLUTE/PATH/TO/IconForge/mcp/dist/index.js",
         "--iconforge-root",
-        "/ABSOLUTE/PATH/TO/IconForgeEnigma",
+        "/ABSOLUTE/PATH/TO/IconForge",
         "--workspace-root",
         "${workspaceFolder}"
       ],
       "env": {
-        "ICONFORGE_ROOT": "/ABSOLUTE/PATH/TO/IconForgeEnigma",
+        "ICONFORGE_ROOT": "/ABSOLUTE/PATH/TO/IconForge",
         "ICONFORGE_WORKSPACE_ROOT": "${workspaceFolder}"
       }
     }
